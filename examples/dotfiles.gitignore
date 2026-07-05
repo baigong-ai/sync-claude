@@ -1,0 +1,21 @@
+# dotfiles 仓库用的 .gitignore
+# 防止本地 / 敏感 / 历史类内容误提交
+
+# 本地敏感覆盖(各机器各自的 token 等)
+**/*.local.json
+settings.local.json
+
+# 历史与会话(本就不该进仓库)
+projects/
+sessions/
+session-env/
+shell-snapshots/
+backups/
+history.jsonl
+
+# 备份产物
+*.bak.*
+
+# 系统
+.DS_Store
+Thumbs.db

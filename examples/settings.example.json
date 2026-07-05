@@ -1,0 +1,21 @@
+{
+  "_comment": "脱敏后的 settings.json 模板。把这份当作你 dotfiles 仓库里 settings.json 的起点。注意:真正入库的 settings.json 不要含 token —— token 请放到 ~/.claude/settings.local.json 或 shell 环境变量。下面的 ANTHROPIC_AUTH_TOKEN 是占位符,实际值各机器自己填。",
+
+  "enabledPlugins": {
+    "glm-plan-usage@zai-coding-plugins": true
+  },
+
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "***REDACTED — 不要把真实 token 写进这份文件;放到 settings.local.json 或 shell env***",
+    "ANTHROPIC_BASE_URL": "https://open.bigmodel.cn/api/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.7",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.1",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.1",
+    "ANTHROPIC_MODEL": "glm-5.1",
+    "ANTHROPIC_REASONING_MODEL": "glm-5.1",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+
+  "skipDangerousModePermissionPrompt": true
+}
