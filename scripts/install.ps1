@@ -43,5 +43,41 @@ foreach ($item in $items) {
     Write-Host "✓ $item -> $target"
 }
 
+# MCP servers:从 dotfiles 的 mcp-servers.json 导入到本机 user scope
+$mcpJson = Join-Path $Src "mcp-servers.json"
+if (Test-Path $mcpJson) {
+    Write-Host ""
+    if (Get-Command claude -ErrorAction SilentlyContinue) {
+        Write-Host "=== 导入 MCP servers(user scope)==="
+        $mcp = Get-Content $mcpJson -Raw | ConvertFrom-Json
+        $added = 0; $skipped = 0; $failed = 0
+        foreach ($prop in $mcp.PSObject.Properties) {
+            $name = $prop.Name; $cfg = $prop.Value
+            & claude mcp get $name 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { Write-Host "  - 跳过(已存在): $name"; $skipped++; continue }
+            $cfgJson = $cfg | ConvertTo-Json -Depth 100 -Compress
+            & claude mcp add-json $name $cfgJson -s user 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $todo = @()
+                if ($cfg.env) {
+                    $ek = @(); foreach ($e in $cfg.env.PSObject.Properties) { $ek += $e.Name }
+                    if ($ek.Count) { $todo += "env=[$($ek -join ',')]" }
+                }
+                if ($cfg.headers) {
+                    $hk = @(); foreach ($h in $cfg.headers.PSObject.Properties) { $hk += $h.Name }
+                    if ($hk.Count) { $todo += "headers=[$($hk -join ',')]" }
+                }
+                $hint = ""; if ($todo.Count) { $hint = "  ! 待填: $($todo -join ', ')" }
+                Write-Host "  + 新增: $name$hint"
+                $added++
+            } else { Write-Host "  x 失败: $name"; $failed++ }
+        }
+        Write-Host "  汇总: 新增 $added, 跳过 $skipped, 失败 $failed"
+        Write-Host "  提示:env/headers 是 ***REDACTED*** 占位,需手动填回真实凭证"
+    } else {
+        Write-Host "发现 $mcpJson 但本机没有 claude 命令,跳过 MCP 导入(装好 claude 后重跑即可)"
+    }
+}
+
 Write-Host ""
 Write-Host "完成。"

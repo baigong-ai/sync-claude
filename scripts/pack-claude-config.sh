@@ -10,13 +10,14 @@
 #   CC_PYTHON   Python 解释器路径,默认 ~/.venvs/cc-data/bin/python,回退 python3
 #   CLAUDE_HOME Claude Code 配置目录,默认 ~/.claude
 #
-# 打包策略:
+# 打包策略(覆盖 Claude Code 全部个人配置):
 #   - CLAUDE.md / keybindings / commands / agents / output-styles / hooks:全量
-#   - skills:只打"自定义"(启发式 = 目录下没有 LICENSE/LICENSE.txt 的);
-#             官方/插件 skill 都带 LICENSE,新机装 Claude Code 自带,不打
-#   - plugins:打包 installed_plugins.json + known_marketplaces.json,并生成
-#             可读的 plugins-inventory.md,便于多机对比"哪台装了啥"
-#   - settings.json:脱敏(token/key/secret 类字段 → ***REDACTED***)
+#   - skills:只打"自定义"(目录下没有 LICENSE/LICENSE.txt 的);官方/插件 skill 跳过
+#   - plugins:installed_plugins.json + known_marketplaces.json + 可读 inventory
+#   - MCP servers:从 ~/.claude.json 提取 mcpServers,env 值全脱敏(保留 key 名)
+#   - settings.json:token/key/secret 类字段 → ***REDACTED***
+#   不打包:projects/、sessions/、history.jsonl、~/.claude.json 的其余字段
+#  (对话历史/登录态/统计,既敏感又设备相关)
 
 set -euo pipefail
 
@@ -52,21 +53,22 @@ if [ -d skills ]; then
   done
 fi
 
-# 3) plugins:打包清单文件(known_marketplaces 让目标机能找到同样的市场)
+# 3) plugins:打包清单文件
 if [ -d plugins ] && { [ -f plugins/installed_plugins.json ] || [ -f plugins/known_marketplaces.json ]; }; then
   mkdir -p "$TMP/.claude/plugins"
   [ -f plugins/installed_plugins.json ]  && cp plugins/installed_plugins.json  "$TMP/.claude/plugins/"
   [ -f plugins/known_marketplaces.json ] && cp plugins/known_marketplaces.json "$TMP/.claude/plugins/"
 fi
 
-# 4) settings.json 脱敏 + 生成 plugins-inventory.md(一次 python 调用搞定)
+# 4) settings.json 脱敏 + MCP 导出 + 生成 inventory(一次 python 调用搞定)
 PYBIN="${CC_PYTHON:-$HOME/.venvs/cc-data/bin/python}"
 command -v "$PYBIN" >/dev/null 2>&1 || PYBIN=python3
 "$PYBIN" - "$CLAUDE_HOME" "$TMP/.claude" "$HOST" <<'PY'
-import json, pathlib, re, sys
-home = pathlib.Path(sys.argv[1])
-dst  = pathlib.Path(sys.argv[2])
-host = sys.argv[3]
+import json, os, pathlib, re, sys
+claude_home = pathlib.Path(sys.argv[1])
+dst         = pathlib.Path(sys.argv[2])
+host        = sys.argv[3]
+user_home   = pathlib.Path(os.path.expanduser("~"))
 
 def load(p):
     try:
@@ -75,7 +77,7 @@ def load(p):
         return None
 
 # --- 脱敏 settings.json ---
-settings = load(home / "settings.json")
+settings = load(claude_home / "settings.json")
 if settings is not None:
     SENS = re.compile(r'(?i)(token|key|secret|password|auth|credential)')
     def redact(o):
@@ -86,20 +88,40 @@ if settings is not None:
             return [redact(x) for x in o]
         return o
     (dst / "settings.json").write_text(json.dumps(redact(settings), indent=2, ensure_ascii=False))
+else:
+    SENS = re.compile(r'(?i)(token|key|secret|password|auth|credential)')
 
-# --- 生成 plugins-inventory.md(人类可读,便于多机对比)---
-installed    = load(home / "plugins" / "installed_plugins.json")
-marketplaces = load(home / "plugins" / "known_marketplaces.json")
+# --- MCP servers:从 ~/.claude.json 提取,env 值全脱敏(保留 key 名)---
+claude_json = user_home / ".claude.json"
+mcp_all = {}
+if claude_json.exists():
+    cjd = load(claude_json) or {}
+    mcp_all = cjd.get("mcpServers") or {}
+
+mcp_export = {}
+for name, cfg in mcp_all.items():
+    cfg2 = {k: v for k, v in (cfg or {}).items() if k not in ("env", "headers")}
+    if (cfg or {}).get("env"):
+        # MCP env 极大概率含凭证 → 值全脱敏,只保留 key 名(让用户知道要填哪些)
+        cfg2["env"] = {k: "***REDACTED***" for k in cfg["env"]}
+    if (cfg or {}).get("headers"):
+        # http server 的 headers 常含 Authorization → 同样全脱敏值
+        cfg2["headers"] = {k: "***REDACTED***" for k in cfg["headers"]}
+    mcp_export[name] = cfg2
+(dst / "mcp-servers.json").write_text(json.dumps(mcp_export, indent=2, ensure_ascii=False))
+
+# --- 生成可读 inventory(插件 + MCP,便于多机对比)---
+installed    = load(claude_home / "plugins" / "installed_plugins.json")
+marketplaces = load(claude_home / "plugins" / "known_marketplaces.json")
 ep = (settings or {}).get("enabledPlugins") or {}
 
-L = [f"# Plugins Inventory — {host}", "", "_由 pack-claude-config 生成_", ""]
+L = [f"# Claude Code 配置清单 — {host}", "", "_由 pack-claude-config 生成_", ""]
 
 L.append("## 已安装插件 (`installed_plugins.json`)")
 if installed and installed.get("plugins"):
     for spec, instances in installed["plugins"].items():
         for inst in instances:
-            ver = inst.get("version", "?")
-            scope = inst.get("scope", "?")
+            ver = inst.get("version", "?"); scope = inst.get("scope", "?")
             ts = str(inst.get("installedAt", "?"))[:10]
             L.append(f"- `{spec}` v{ver} — scope={scope}, installed {ts}")
 else:
@@ -107,10 +129,9 @@ else:
 L.append("")
 
 L.append("## 启用的插件 (`settings.json` → `enabledPlugins`)")
-if ep:
-    for k, v in ep.items():
-        L.append(f"- `{k}` = {v}")
-else:
+for k, v in ep.items():
+    L.append(f"- `{k}` = {v}")
+if not ep:
     L.append("_(无)_")
 L.append("")
 
@@ -125,9 +146,25 @@ else:
     L.append("_(无)_")
 L.append("")
 
+L.append("## MCP servers (`~/.claude.json` → `mcpServers`)")
+if mcp_all:
+    for name, cfg in mcp_all.items():
+        transport = (cfg or {}).get("type", "stdio")
+        cmd = (cfg or {}).get("command") or (cfg or {}).get("url") or "?"
+        envkeys = list(((cfg or {}).get("env") or {}).keys())
+        hdrkeys = list(((cfg or {}).get("headers") or {}).keys())
+        parts = []
+        if envkeys: parts.append(f"env=[{', '.join(envkeys)}]")
+        if hdrkeys: parts.append(f"headers=[{', '.join(hdrkeys)}]")
+        extra = (", " + ", ".join(parts)) if parts else ""
+        L.append(f"- `{name}` — {transport}, {cmd}{extra}")
+else:
+    L.append("_(无)_")
+L.append("")
+
 (dst / "plugins-inventory.md").write_text("\n".join(L))
 n_inst = len((installed or {}).get("plugins", {}) or {})
-print(f"  • 生成插件清单: {n_inst} 已装 / {len(ep)} 启用 / {len(marketplaces or {})} 市场")
+print(f"  • 清单: {n_inst} 插件 / {len(ep)} 启用 / {len(marketplaces or {})} 市场 / {len(mcp_all)} MCP")
 PY
 
 # 5) 打包
