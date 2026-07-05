@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sync-claude · 配置合并向导</title>
+<!--
+  sync.html — Claude Code 配置合并向导(单文件,双击即用,零 Web Server)。
+  纯前端:webkitdirectory 读 ~/.claude、单文件读 ~/.claude.json、手写 STORE-only zip。
+  脱敏规则镜像 scripts/pack-claude-config.sh。生成的 install.sh 是 Mac-first。
+  详细方案见项目根 plan / README。
+-->
+<style>
+  :root{
+    --bg:#fafafa; --card:#fff; --ink:#1a1a1a; --mute:#666; --line:#e2e2e2;
+    --accent:#2563eb; --accent-bg:#eef4ff; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+    --same:#16a34a; --differ:#d97706; --onlyL:#2563eb; --onlyR:#9333ea; --off:#9ca3af;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink);}
+  header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);
+         padding:12px 20px;display:flex;align-items:center;gap:12px;}
+  header h1{font-size:16px;margin:0;font-weight:600;}
+  header .sub{color:var(--mute);font-size:12px;}
+  header .spacer{flex:1}
+  .wrap{max-width:920px;margin:0 auto;padding:20px;}
+  details#settings-panel{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:16px;padding:10px 14px;}
+  details#settings-panel summary{cursor:pointer;font-weight:600;color:var(--mute);}
+  details#settings-panel[open] summary{color:var(--ink);margin-bottom:10px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
+  .grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute);}
+  .grid input,.grid select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .danger{border:1px solid var(--warn);background:#fffbeb;border-radius:8px;padding:10px 14px;margin-top:10px;}
+  .danger.on{background:#fef3c7;}
+  button,.btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 14px;
+              border-radius:6px;font-size:13px;cursor:pointer;}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.primary:disabled{background:#9db8ee;border-color:#9db8ee;cursor:not-allowed;}
+  button.ghost{background:transparent;}
+  /* stepper */
+  nav#stepper{display:flex;gap:6px;margin-bottom:18px;}
+  nav#stepper .node{flex:1;text-align:center;padding:10px 6px;border:1px solid var(--line);border-radius:8px;
+                    background:var(--card);font-size:12px;color:var(--mute);cursor:pointer;position:relative;}
+  nav#stepper .node .n{display:block;font-size:15px;font-weight:700;color:var(--ink);}
+  nav#stepper .node.active{border-color:var(--accent);background:var(--accent-bg);}
+  nav#stepper .node.done{border-color:var(--ok);color:var(--ok);}
+  nav#stepper .node.done .n:after{content:" ✓";}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px;}
+  .card h3{margin:0 0 10px;font-size:14px;}
+  .cat{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f0f0f0;}
+  .cat:last-child{border-bottom:none}
+  .cat .name{font-weight:600;min-width:150px;}
+  .cat .meta{color:var(--mute);font-size:12px;}
+  .cat input[type=checkbox]{width:16px;height:16px;}
+  .cat.missing{opacity:.45}
+  .filelist{margin:6px 0 6px 24px;color:var(--mute);font-size:12px;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;}
+  .pill.same{background:var(--same)} .pill.differ{background:var(--differ)}
+  .pill.onlyL{background:var(--onlyL)} .pill.onlyR{background:var(--onlyR)} .pill.off{background:var(--off)}
+  table{width:100%;border-collapse:collapse;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #f0f0f0;vertical-align:top;font-size:13px;}
+  th{color:var(--mute);font-weight:600;font-size:12px;}
+  .diffline{font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;}
+  .diffline.add{background:#e6f9e6;} .diffline.del{background:#fde8e8;color:#7f1d1d;}
+  .diffline.eq{color:#999;} .diffline.ctx{color:#999;font-style:italic;}
+  details.diff{margin-top:6px;}
+  details.diff summary{cursor:pointer;color:var(--accent);font-size:12px;}
+  .setview{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .setview .col h4{margin:0 0 6px;font-size:12px;color:var(--mute);}
+  .setview li{list-style:none;padding:2px 0;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+  .setview .tag{font-size:10px;color:#fff;border-radius:4px;padding:0 5px;margin-left:4px;}
+  .set-L .tag{background:var(--onlyL)} .set-R .tag{background:var(--onlyR)}
+  textarea.merged{width:100%;min-height:140px;font:12px/1.5 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:6px;padding:8px;}
+  pre.installsh{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto;font-size:12px;max-height:420px;}
+  footer#status{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);
+                padding:8px 20px;font-size:12px;color:var(--mute);display:flex;gap:16px;}
+  footer#status .badge{padding:1px 8px;border-radius:999px;font-weight:600;}
+  footer#status .badge.safe{background:#e6f9e6;color:var(--ok);}
+  footer#status .badge.danger{background:#fef3c7;color:var(--warn);}
+  .toast{position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.2);}
+  .stepnav{display:flex;justify-content:space-between;margin-top:18px;}
+  .muted{color:var(--mute);} .small{font-size:12px;}
+  .hidden-input{position:absolute;left:-9999px;}
+  a{color:var(--accent);}
+  code{background:#f3f4f6;border-radius:3px;padding:0 4px;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+  kbd{background:#f3f4f6;border:1px solid #d1d5db;border-bottom-width:2px;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+  .dropzone{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;background:#fafafa;transition:.15s;}
+  .dropzone.hover{border-color:var(--accent);background:var(--accent-bg);}
+  .dz-big{font-size:15px;font-weight:600;margin-bottom:4px;}
+  .dz-sub{color:var(--mute);font-size:12px;margin-bottom:10px;}
+  .dz-or{color:var(--mute);margin:8px 0;font-size:12px;}
+  .help{margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 14px;}
+  .help summary{cursor:pointer;font-weight:600;color:var(--warn);}
+  .help ol{margin:8px 0 0 18px;padding:0;} .help li{margin:5px 0;}
+  .okbox{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-top:12px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔁 sync-claude</h1>
+  <span class="sub">配置合并向导 · 单文件 · 零 Web Server</span>
+  <span class="spacer"></span>
+  <span class="small muted" id="zip-mode">zip: STORE(手写,无外部依赖)</span>
+</header>
+
+<div class="wrap">
+
+  <details id="settings-panel">
+    <summary>⚙️ 全局设置(Git Server / 输出目录 / 敏感凭证 / 设置导入导出)</summary>
+    <div class="grid">
+      <label>Git Server(留空则不写)<input type="text" id="set-gitserver" placeholder="github.com 或 gitea.example.com"></label>
+      <label>仓库(repo)名<input type="text" id="set-reponame" placeholder="you/dotfiles"></label>
+      <label>协议
+        <select id="set-protocol"><option value="ssh">ssh (git@)</option><option value="https">https</option></select>
+      </label>
+      <label>输出目录(生成的 install.sh 用)<input type="text" id="set-outputdir" placeholder="~/dotfiles"></label>
+    </div>
+    <div class="danger" id="danger-zone">
+      <div class="row">
+        <label class="row" style="flex-direction:row;gap:6px;font-size:13px;color:var(--ink);">
+          <input type="checkbox" id="set-secrets"> <b>本次包含真实凭证</b>
+          <span class="small muted">勾选后,token / API key / Authorization 头的<b>真实值</b>会进入导出 zip(默认全部脱敏)</span>
+        </label>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="export-settings" class="ghost">导出设置</button>
+        <label class="btn ghost">导入设置<input type="file" id="import-settings" accept=".json" class="hidden-input"></label>
+      </div>
+    </div>
+  </details>
+
+  <nav id="stepper"></nav>
+
+  <main id="step-body"></main>
+
+  <div class="stepnav">
+    <button id="btn-prev" class="ghost">← 上一步</button>
+    <button id="btn-next" class="primary">下一步 →</button>
+  </div>
+
+</div>
+
+<footer id="status"><span id="status-text">就绪</span><span class="spacer"></span><span id="redact-badge" class="badge safe">🛡️ 脱敏中</span></footer>
+
+<!-- ===== 模板:text/plain 块,避免 shell/JS 转义冲突 ===== -->
+
+<script type="text/plain" id="tpl-install-sh">
+#!/usr/bin/env bash
+# Generated by sync.html on {{DATE}}. Mac-first (Phase 1).
+# Source: {{GIT_URL}}
+set -euo pipefail
+
+DOTFILES="${1:-{{OUTPUT_DIR}}}"
+SRC="$DOTFILES/claude"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+[ -d "$SRC" ] || { echo "✗ 找不到 $SRC"; exit 1; }
+mkdir -p "$CLAUDE_HOME"
+
+# --- 把选定的基线条目,以符号链接挂到 ~/.claude/ ---
+ITEMS=( {{ITEMS}} )
+for item in "${ITEMS[@]}"; do
+  target="$SRC/$item"; link="$CLAUDE_HOME/$item"
+  [ -e "$target" ] || continue
+  if [ -e "$link" ] && [ ! -L "$link" ]; then
+    backup="$link.bak.$(date +%Y%m%d-%H%M%S)"
+    mv "$link" "$backup"; echo "  已备份 $item → $backup"
+  fi
+  ln -snf "$target" "$link"; echo "✓ $item → $target"
+done
+
+# --- MCP servers:user scope 导入(env/headers 是占位,需手填真值)---
+MCP_JSON="$SRC/mcp-servers.json"
+if [ -f "$MCP_JSON" ] && command -v claude >/dev/null 2>&1; then
+  echo "=== 导入 MCP servers (user scope) ==="
+  PYBIN="${CC_PYTHON:-$HOME/.venvs/cc-data/bin/python}"
+  command -v "$PYBIN" >/dev/null 2>&1 || PYBIN=python3
+  "$PYBIN" - "$MCP_JSON" <<'PY'
+import json, subprocess, sys
+mcp = json.load(open(sys.argv[1]))
+added=skipped=failed=0
+for name, cfg in mcp.items():
+    chk=subprocess.run(["claude","mcp","get",name],capture_output=True,text=True)
+    if chk.returncode==0:
+        print(f"  • 跳过(已存在): {name}"); skipped+=1; continue
+    try:
+        subprocess.run(["claude","mcp","add-json",name,json.dumps(cfg),"-s","user"],
+                       check=True,capture_output=True,text=True)
+        ek=list((cfg.get("env") or {}).keys()); hk=list((cfg.get("headers") or {}).keys())
+        todo=([f"env={ek}"] if ek else [])+([f"headers={hk}"] if hk else [])
+        print(f"  ✓ 新增: {name}"+(("  ⚠ 待填: "+", ".join(todo)) if todo else "")); added+=1
+    except subprocess.CalledProcessError as e:
+        print(f"  ✗ 失败: {name} — {(e.stderr or '').strip() or e}"); failed+=1
+print(f"\n  汇总: 新增 {added}, 跳过 {skipped}, 失败 {failed}")
+print("  提示:env/headers 是 ***REDACTED*** 占位,需手动填回真实凭证")
+PY
+elif [ -f "$MCP_JSON" ]; then
+  echo "⚠ 发现 $MCP_JSON 但本机无 claude 命令,跳过 MCP 导入"
+fi
+
+echo "完成。验证: ls -la $CLAUDE_HOME"
+</script>
+
+<script type="text/plain" id="tpl-readme">
+# claude dotfiles 基线
+
+由 sync.html 于 {{DATE}} 生成。来源:{{GIT_URL}}
+
+## 安装(每台机器一次性)
+
+把本目录解压 / clone 到 {{OUTPUT_DIR}},然后:
+
+    cd {{OUTPUT_DIR}}
+    bash install.sh
+
+脚本会:
+- 在 ~/.claude/ 下建符号链接,指向 ./claude/ 里的对应文件;
+- 把 ./claude/mcp-servers.json 里的 MCP servers 用 `claude mcp add-json -s user` 导入;
+- 已存在的本地同名文件会先备份为 *.bak.<时间戳>。
+
+## 敏感凭证(token / API key / Authorization)
+
+不在本仓库里。请各自填到:
+- shell 环境变量(推荐):~/.zshrc 里 `export ANTHROPIC_AUTH_TOKEN=...`;
+- 或 ~/.claude/settings.local.json(已被 .gitignore 排除)。
+
+MCP server 的 env/headers:导入后编辑 ~/.claude.json,把 ***REDACTED*** 占位换成真值。
+
+## 日常同步
+
+改了配置 → 在本目录 `git commit && git push`;其它机器 `git pull` 即生效(因为是符号链接)。
+</script>
+
+<script type="text/plain" id="tpl-gitignore">
+# 本地敏感覆盖(各机器各自的 token 等)
+**/*.local.json
+settings.local.json
+
+# 历史与会话(本就不该进仓库)
+projects/
+sessions/
+session-env/
+shell-snapshots/
+backups/
+history.jsonl
+
+# 备份产物
+*.bak.*
+
+# 系统
+.DS_Store
+Thumbs.db
+</script>
+
+<script>
+"use strict";
+/* =========================================================================
+   sync.html 主脚本。模块划分(用 banner 注释分隔):
+     1. STATE          2. SETTINGS STORE     3. FILE READERS
+     4. SNAPSHOT BUILDER  5. REDACTOR       6. DIFF ENGINE
+     7. ZIP (STORE)    8. INSTALL-SCRIPT GEN 9. UI RENDER  10. WIRING
+   脱敏规则 MUST 镜像 scripts/pack-claude-config.sh L79–111。改 pack.sh 要同步改这里。
+   ========================================================================= */
+
+// ===== 1. STATE =====
+const CATEGORY_ORDER = [
+  'CLAUDE.md','settings.json','keybindings.json',
+  'commands/','agents/','output-styles/','hooks/','skills/','plugins/','mcpServers'
+];
+const CATEGORY_LABEL = {
+  'CLAUDE.md':'全局指令 CLAUDE.md',
+  'settings.json':'用户设置 settings.json(脱敏)',
+  'keybindings.json':'快捷键 keybindings.json',
+  'commands/':'自定义命令 commands/',
+  'agents/':'子代理 agents/',
+  'output-styles/':'输出风格 output-styles/',
+  'hooks/':'hooks 脚本',
+  'skills/':'自定义 skill(自动排除带 LICENSE 的官方/插件 skill)',
+  'plugins/':'插件清单 plugins/',
+  'mcpServers':'MCP servers(从 ~/.claude.json 提取,脱敏)',
+};
+const state = {
+  step: 1,
+  settings: { gitServer:'', repoName:'', protocol:'ssh', outputDir:'~/dotfiles', includeSecrets:false },
+  local:  { source:'本机', files:{}, categories:{}, pickedFolderName:'' },
+  remote: { source:'导入', files:{}, archiveName:'' },
+  diff: null,        // [{path, category, status, inL, inR}]
+  decisions: {},     // path -> {include, pick:'local'|'remote'|'merged', mergedText}
+  lastInstallSh: '',
+};
+
+// ===== 2. SETTINGS STORE =====
+const LS_KEY = 'sync-claude-settings';
+function loadSettings(){
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) Object.assign(state.settings, JSON.parse(raw));
+  } catch(e){ /* file:// 下 localStorage 可能不可用,忽略 */ }
+}
+function saveSettings(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state.settings)); }
+  catch(e){ toast('本地存储不可用 — 设置仅本次会话有效,请用「导出设置」保存'); }
+}
+function bindSettings(){
+  const map = { 'set-gitserver':'gitServer','set-reponame':'repoName',
+                'set-protocol':'protocol','set-outputdir':'outputDir','set-secrets':'includeSecrets' };
+  for (const [id,key] of Object.entries(map)){
+    const el = document.getElementById(id);
+    if (key === 'includeSecrets'){
+      el.checked = !!state.settings.includeSecrets;
+      el.addEventListener('change', ()=>{
+        if (el.checked && !confirm('⚠ 开启后,token / API key / Authorization 头的【真实值】会进入导出 zip。\n该 zip 视为机密:git 仓库必须 private,或干脆不入库。确定?')){
+          el.checked = false; return;
+        }
+        state.settings.includeSecrets = el.checked;
+        updateDanger(); saveSettings(); renderStatus();
+        // 凭证开关变化 → 若已有快照,提示重新选目录以刷新
+        if (Object.keys(state.local.files).length) toast('凭证开关变了:请重新选择 ~/.claude 以刷新');
+      });
+    } else {
+      el.value = state.settings[key] || '';
+      el.addEventListener('change', ()=>{ state.settings[key] = el.value.trim(); saveSettings(); });
+    }
+  }
+  document.getElementById('export-settings').addEventListener('click', exportSettings);
+  document.getElementById('import-settings').addEventListener('change', importSettings);
+  updateDanger();
+}
+function updateDanger(){
+  document.getElementById('danger-zone').classList.toggle('on', !!state.settings.includeSecrets);
+}
+function exportSettings(){
+  const blob = new Blob([JSON.stringify(state.settings,null,2)], {type:'application/json'});
+  downloadBlob(blob, 'sync-settings.json');
+}
+async function importSettings(e){
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const obj = JSON.parse(await f.text());
+    Object.assign(state.settings, obj);
+    saveSettings(); bindSettings(); renderStatus();
+    toast('设置已导入');
+  } catch(err){ toast('设置解析失败: '+err.message); }
+  e.target.value = '';
+}
+
+// ===== 3. FILE READERS =====
+const TD = new TextDecoder();
+function categorize(path){
+  if (path === 'CLAUDE.md') return 'CLAUDE.md';
+  if (path === 'settings.json') return 'settings.json';
+  if (path === 'keybindings.json') return 'keybindings.json';
+  if (path === 'mcp-servers.json') return 'mcpServers';
+  if (path.startsWith('commands/')) return 'commands/';
+  if (path.startsWith('agents/')) return 'agents/';
+  if (path.startsWith('output-styles/')) return 'output-styles/';
+  if (path.startsWith('hooks/')) return 'hooks/';
+  if (path.startsWith('skills/')) return 'skills/';
+  if (path.startsWith('plugins/')) return 'plugins/';
+  return null;
+}
+// 把 <input webkitdirectory>.files 转成 [{file, relPath}]
+function entriesFromFileList(fileList){
+  return Array.from(fileList).map(f => ({ file:f, relPath: f.webkitRelativePath || f.name }));
+}
+// 拖入时递归读取目录项;剪枝超大/无关子目录,加速「拖整个 Home」
+const DROP_PRUNE = new Set(['Library','node_modules','.Trash','.cache','.git','Pictures','Movies','Music','Public','Applications','Desktop','Documents','Downloads']);
+function _readBatch(reader){ return new Promise(res=>reader.readEntries(es=>res(es), er=>{ console.warn('[sync.html] readEntries 失败(可能是 file:// 限制)', er); res([]); })); }
+async function collectEntry(entry, prefix, out){
+  const path = prefix ? prefix + '/' + entry.name : entry.name;
+  if (entry.isFile){
+    await new Promise(res => entry.file(f => { out.push({file:f, relPath:path}); res(); }, er=>{ console.warn('[sync.html] entry.file 失败', path, er); res(); }));
+  } else if (entry.isDirectory){
+    if (prefix && DROP_PRUNE.has(entry.name)) return; // 嵌套的重目录跳过(顶层保留,以支持拖 Home)
+    const reader = entry.createReader();
+    let batch, got=[];
+    do { batch = await _readBatch(reader); got.push(...batch); } while (batch.length);
+    for (const e of got) await collectEntry(e, path, out);
+  }
+}
+// 拖入:先试 entries API(递归读目录内容);再兜底读 dt.files(单文件拖入,或 entries 哑火时)
+// 返回 { entries, diag };diag 用于失败时给出准确、可操作的提示
+async function entriesFromDrop(dt){
+  const out = []; let nItems=0, nEntries=0, nFiles=0;
+  if (dt && dt.items){
+    nItems = dt.items.length;
+    const ents = [];
+    for (const it of Array.from(dt.items)){
+      if (it.kind === 'file' && it.webkitGetAsEntry){ const e = it.webkitGetAsEntry(); if (e) ents.push(e); }
+    }
+    nEntries = ents.length;
+    for (const e of ents) await collectEntry(e, '', out);
+  }
+  if (dt && dt.files && dt.files.length){
+    nFiles = dt.files.length;
+    for (const f of Array.from(dt.files)){
+      const rp = f.webkitRelativePath || f.name;
+      if (!f.webkitRelativePath && f.size === 0) continue; // 拖文件夹时常出现代表文件夹本身的占位 File,跳过
+      if (!out.some(x => x.relPath === rp)) out.push({ file:f, relPath:rp });
+    }
+  }
+  return { entries: out, diag:{ nItems, nEntries, nFiles } };
+}
+// 统一过滤:从任意 [{file,relPath}] 里挑出 .claude/** (转逻辑路径) 和 .claude.json
+// 这样无论用户选/拖的是 .claude 本身、还是整个 Home,都能正确识别
+function ingest(entries){
+  const claudeRaw = {}; let mcpFile = null;
+  for (const {file, relPath} of entries){
+    const m = relPath.match(/(?:^|\/)\.claude\/(.+)$/);
+    if (m){ const logical = m[1]; if (!logical.endsWith('/')) claudeRaw[logical] = file; continue; }
+    if (/(?:^|\/)\.claude\.json$/.test(relPath)){ mcpFile = file; continue; }
+  }
+  return { claudeRaw, mcpFile };
+}
+async function buildClaudeFiles(claudeRaw){
+  const files = {};
+  for (const [logical, f] of Object.entries(claudeRaw)){
+    const cat = categorize(logical);
+    if (!cat) continue;               // 忽略 projects/、sessions/、缓存等噪声
+    if (f.size > 5*1024*1024) continue;
+    const ab = await f.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    files[logical] = { bytes, text: TD.decode(bytes), size: f.size, category: cat };
+  }
+  return files;
+}
+async function parseMcpFile(file){
+  if (!file) return null;
+  let parsed; try { parsed = JSON.parse(await file.text()); } catch(e){ return { error:e.message }; }
+  const mcpServers = (parsed && parsed.mcpServers) || {};
+  // 合成 mcp-servers.json 伪文件(保留原始对象;显示/导出时按开关脱敏)
+  return { mcpFile: { bytes:null, text:'', size: JSON.stringify(mcpServers).length, category:'mcpServers', json: mcpServers } };
+}
+// 统一入口:picker 和 dropzone 都走这里
+async function processEntries(entries, via){
+  const err = document.getElementById('pick-err'); if (err) err.textContent='';
+  const { claudeRaw, mcpFile } = ingest(entries);
+  const n = Object.keys(claudeRaw).length;
+  if (!n && !mcpFile){ if (err) err.textContent='没找到 .claude/ 或 .claude.json — 换个目录,或看下方提示。'; return; }
+  if (n){
+    const files = await buildClaudeFiles(claudeRaw);
+    const prevMcp = state.local.files['mcp-servers.json'];
+    state.local.files = Object.assign({}, files);
+    if (prevMcp) state.local.files['mcp-servers.json'] = prevMcp;
+    state.local.pickedFolderName = via;
+    state.local.categories = {}; // 重置,categoryStats 会重新填默认勾选
+    const known = Object.keys(files).filter(p=>!['settings.json','mcp-servers.json'].includes(p));
+    if (!known.length && !mcpFile) toast('读到了文件,但没找到已知配置 — 确定是 ~/.claude?');
+  }
+  if (mcpFile){
+    const r = await parseMcpFile(mcpFile);
+    if (r.error){ if (err) err.textContent='.claude.json 解析失败: '+r.error; }
+    else { state.local.files['mcp-servers.json'] = r.mcpFile; state.local.categories.mcpServers = true; }
+  }
+  renderStep();
+}
+async function readArchive(file){
+  const lower = file.name.toLowerCase();
+  const ab = await file.arrayBuffer();
+  const bytes = new Uint8Array(ab);
+  let entries;
+  if (lower.endsWith('.zip')){
+    entries = parseZip(bytes); // {path: Uint8Array}
+  } else if (lower.endsWith('.tgz') || lower.endsWith('.tar.gz')){
+    throw new Error('.tgz 暂不支持。请在源机器用 sync.html 重新导出 .zip,再导入这里。');
+  } else {
+    throw new Error('不认识的文件类型:'+file.name);
+  }
+  const files = {};
+  for (const [path,data] of Object.entries(entries)){
+    let logical = path;
+    if (logical.startsWith('claude/')) logical = logical.slice('claude/'.length);
+    if (['install.sh','README.md','.gitignore'].includes(logical)) continue;
+    const cat = categorize(logical);
+    if (!cat) continue;
+    files[logical] = { bytes: data, text: TD.decode(data), size: data.length, category: cat };
+  }
+  return { files };
+}
+
+// ===== 4. SNAPSHOT BUILDER =====
+function customSkillNames(files){
+  const names = new Set();
+  for (const p of Object.keys(files)){
+    if (!p.startsWith('skills/')) continue;
+    const name = p.split('/')[1]; if (!name) continue;
+    names.add(name);
+  }
+  const custom = new Set();
+  for (const name of names){
+    const licensed = files[`skills/${name}/LICENSE`] || files[`skills/${name}/LICENSE.txt`];
+    if (!licensed) custom.add(name);
+  }
+  return custom;
+}
+function categoryStats(snap){
+  // 返回 { cat: {count, size, present} },并初始化 snap.categories 默认勾选
+  const stats = {}; for (const c of CATEGORY_ORDER) stats[c] = { count:0, size:0, present:false };
+  const custom = customSkillNames(snap.files);
+  for (const [path,f] of Object.entries(snap.files)){
+    const c = f.category; if (!stats[c]) continue;
+    if (c === 'skills/'){
+      const name = path.split('/')[1];
+      if (!custom.has(name)) continue; // 带 LICENSE → 不计入
+    }
+    stats[c].count++; stats[c].size += f.size; stats[c].present = true;
+  }
+  for (const c of CATEGORY_ORDER){
+    if (stats[c].present && snap.categories[c] == null) snap.categories[c] = true;
+    if (!stats[c].present) snap.categories[c] = false;
+  }
+  return stats;
+}
+function activeFiles(snap){
+  // 按 snap.categories 勾选情况 + skills LICENSE 启发式,过滤出参与比对/导出的文件
+  const out = {};
+  const custom = customSkillNames(snap.files);
+  for (const [path,f] of Object.entries(snap.files)){
+    if (!snap.categories[f.category]) continue;
+    if (f.category === 'skills/'){
+      const name = path.split('/')[1];
+      if (!custom.has(name)) continue;
+    }
+    out[path] = f;
+  }
+  return out;
+}
+
+// ===== 5. REDACTOR(镜像 pack-claude-config.sh L79–111)=====
+const SENS_RE = /(token|key|secret|password|auth|credential)/i;
+function _redactable(v){
+  return (typeof v === 'string' && v.length>0) || Array.isArray(v) || (v && typeof v === 'object');
+}
+function redactSettings(o){
+  if (Array.isArray(o)) return o.map(redactSettings);
+  if (o && typeof o === 'object'){
+    const out = {};
+    for (const [k,v] of Object.entries(o))
+      out[k] = (SENS_RE.test(k) && _redactable(v)) ? '***REDACTED***' : redactSettings(v);
+    return out;
+  }
+  return o;
+}
+function redactMcp(mcp){
+  const out = {};
+  for (const [name,cfg] of Object.entries(mcp || {})){
+    const c = Object.assign({}, cfg || {});
+    if (c.env)    c.env    = Object.fromEntries(Object.keys(c.env).map(k=>[k,'***REDACTED***']));
+    if (c.headers)c.headers= Object.fromEntries(Object.keys(c.headers).map(k=>[k,'***REDACTED***']));
+    out[name] = c;
+  }
+  return out;
+}
+function fileText(path, f){
+  // 给定逻辑路径 + 文件对象,返回"按当前开关脱敏后"的文本(settings/mcp 永不在 DOM/导出里暴露真值)
+  const secrets = state.settings.includeSecrets;
+  if (path === 'settings.json' && f.json != null)
+    return JSON.stringify(secrets ? f.json : redactSettings(f.json), null, 2);
+  if (path === 'mcp-servers.json' && f.json != null)
+    return JSON.stringify(secrets ? f.json : redactMcp(f.json), null, 2);
+  return f.text || '';
+}
+
+// ===== 6. DIFF ENGINE =====
+function lineDiff(aText, bText){
+  const A = aText.split('\n'), B = bText.split('\n');
+  if (A.length > 2000 || B.length > 2000)
+    return { truncated:true, ops:[{type:'ctx',text:'⟨文件过长,跳过行级 diff,可在第 4 步手动合并⟩'}] };
+  const n = A.length, m = B.length;
+  const dp = Array.from({length:n+1}, ()=> new Int16Array(m+1));
+  for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--)
+    dp[i][j] = A[i]===B[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const ops = []; let i=0,j=0;
+  while (i<n && j<m){
+    if (A[i]===B[j]){ ops.push({type:'eq',text:A[i]}); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]){ ops.push({type:'del',text:A[i]}); i++; }
+    else { ops.push({type:'add',text:B[j]}); j++; }
+  }
+  while (i<n) ops.push({type:'del',text:A[i++]});
+  while (j<m) ops.push({type:'add',text:B[j++]});
+  return { ops };
+}
+function setDiff(aKeys, bKeys){
+  const A = new Set(aKeys), B = new Set(bKeys);
+  return {
+    onlyA: aKeys.filter(k=>!B.has(k)),
+    onlyB: bKeys.filter(k=>!A.has(k)),
+    both:  aKeys.filter(k=>B.has(k)),
+  };
+}
+function computeDiff(){
+  const L = activeFiles(state.local), R = state.remote.files;
+  const paths = new Set([...Object.keys(L), ...Object.keys(R)]);
+  const items = [];
+  for (const path of paths){
+    const inL = !!L[path], inR = !!R[path];
+    let status;
+    if (inL && inR) status = (fileText(path,L[path]) === fileText(path,R[path])) ? 'same' : 'differ';
+    else if (inL)   status = 'only-local';
+    else            status = 'only-remote';
+    items.push({ path, category: categorize(path), status, inL, inR });
+  }
+  items.sort((a,b)=> (CATEGORY_ORDER.indexOf(a.category)-CATEGORY_ORDER.indexOf(b.category)) || a.path.localeCompare(b.path));
+  return items;
+}
+
+// ===== 7. ZIP (STORE-only,手写,无外部依赖) =====
+const CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = (c&1) ? (0xEDB88320^(c>>>1)) : (c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function concatU8(arrs){
+  let len=0; for (const a of arrs) len += a.length;
+  const out = new Uint8Array(len); let o=0;
+  for (const a of arrs){ out.set(a,o); o += a.length; }
+  return out;
+}
+function writeZip(files){ // files: { path: Uint8Array },STORE only
+  const enc = new TextEncoder();
+  const local = [], central = [];
+  const names = Object.keys(files);
+  let offset = 0;
+  for (const name of names){
+    const data = files[name];
+    const nb = enc.encode(name);
+    const crc = crc32(data);
+    const lh = new Uint8Array(30 + nb.length);
+    const dv = new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0,true);
+    dv.setUint16(8,0,true); dv.setUint16(10,0,true); dv.setUint16(12,0x21,true);
+    dv.setUint32(14,crc,true); dv.setUint32(18,data.length,true); dv.setUint32(22,data.length,true);
+    dv.setUint16(26,nb.length,true); dv.setUint16(28,0,true); lh.set(nb,30);
+    const cd = new Uint8Array(46 + nb.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true); cv.setUint16(14,0x21,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,data.length,true); cv.setUint32(24,data.length,true);
+    cv.setUint16(28,nb.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true);
+    cv.setUint16(34,0,true); cv.setUint16(36,0,true); cv.setUint32(38,0,true); cv.setUint32(42,offset,true);
+    cd.set(nb,46);
+    central.push(cd); local.push(lh, data);
+    offset += lh.length + data.length;
+  }
+  const centralBytes = concatU8(central);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(4,0,true); ev.setUint16(6,0,true);
+  ev.setUint16(8,names.length,true); ev.setUint16(10,names.length,true);
+  ev.setUint32(12,centralBytes.length,true); ev.setUint32(16,offset,true); ev.setUint16(20,0,true);
+  return concatU8([...local, centralBytes, eocd]);
+}
+function parseZip(bytes){ // STORE only → {path: Uint8Array}
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  const min = Math.max(0, bytes.length - 65557);
+  for (let i = bytes.length - 22; i >= min; i--){
+    if (dv.getUint32(i,true) === 0x06054b50){ eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('zip: 找不到结尾标记,可能不是 zip');
+  const count = dv.getUint16(eocd+10,true);
+  const cdOffset = dv.getUint32(eocd+16,true);
+  const dec = new TextDecoder();
+  const out = {};
+  let p = cdOffset;
+  for (let i=0;i<count;i++){
+    if (dv.getUint32(p,true) !== 0x02014b50) throw new Error('zip: 中央目录记录损坏');
+    const method  = dv.getUint16(p+10,true);
+    const compSize= dv.getUint32(p+20,true);
+    const nameLen = dv.getUint16(p+28,true);
+    const extraLen = dv.getUint16(p+30,true);
+    const commentLen = dv.getUint16(p+32,true);
+    const localOff = dv.getUint32(p+42,true);
+    const name = dec.decode(bytes.subarray(p+46, p+46+nameLen));
+    p += 46 + nameLen + extraLen + commentLen;
+    if (method !== 0) throw new Error(`zip 内「${name}」使用了压缩(method=${method}),仅支持 STORE。请导入 sync.html 自己导出的 zip。`);
+    const lhNameLen = dv.getUint16(localOff+26,true);
+    const lhExtraLen= dv.getUint16(localOff+28,true);
+    const dataStart = localOff + 30 + lhNameLen + lhExtraLen;
+    out[name] = bytes.subarray(dataStart, dataStart + compSize);
+  }
+  return out;
+}
+
+// ===== 8. INSTALL-SCRIPT GENERATOR =====
+function gitUrl(){
+  const { gitServer, repoName, protocol } = state.settings;
+  if (!gitServer || !repoName) return '';
+  return protocol === 'ssh'
+    ? `git@${gitServer}:${repoName}.git`
+    : `https://${gitServer}/${repoName}.git`;
+}
+function topLevelOf(path){
+  return path.includes('/') ? path.split('/')[0] : path;
+}
+function generateInstallSh(selectedPaths){
+  const itemsSet = new Set();
+  for (const p of selectedPaths){
+    if (p === 'mcp-servers.json') continue;            // mcp 不挂链接,走 claude mcp 导入
+    if (p.startsWith('plugins/')){ itemsSet.add('plugins'); continue; }
+    itemsSet.add(topLevelOf(p));
+  }
+  // 保持稳定顺序
+  const items = CATEGORY_ORDER.map(c=>c.replace(/\/$/,''))
+    .filter(c => itemsSet.has(c));
+  const tpl = document.getElementById('tpl-install-sh').textContent.trim();
+  const url = gitUrl() || '(本地 zip)';
+  return tpl
+    .replaceAll('{{DATE}}',   new Date().toISOString().slice(0,10))
+    .replaceAll('{{OUTPUT_DIR}}', state.settings.outputDir || '~/dotfiles')
+    .replaceAll('{{GIT_URL}}', url)
+    .replaceAll('{{ITEMS}}',  items.join(' '));
+}
+function generateReadme(){
+  const tpl = document.getElementById('tpl-readme').textContent.trim();
+  return tpl
+    .replaceAll('{{DATE}}',   new Date().toISOString().slice(0,10))
+    .replaceAll('{{OUTPUT_DIR}}', state.settings.outputDir || '~/dotfiles')
+    .replaceAll('{{GIT_URL}}', gitUrl() || '(本地 zip)');
+}
+function buildBaselineFiles(){
+  // 生成 zip 内容:{ 'claude/<path>': bytes, 'install.sh':..., 'README.md':..., '.gitignore':... }
+  const enc = new TextEncoder();
+  const files = {};
+  const selectedPaths = [];
+  const L = activeFiles(state.local);
+  for (const [path,dec] of Object.entries(state.decisions)){
+    if (!dec.include) continue;
+    let text;
+    if (dec.pick === 'merged' && dec.mergedText != null) text = dec.mergedText;
+    else if (dec.pick === 'remote') text = fileText(path, state.remote.files[path]);
+    else text = fileText(path, L[path]); // 默认 local(either/only-local)
+    if (text == null) continue;
+    files['claude/'+path] = enc.encode(text);
+    selectedPaths.push(path);
+  }
+  // install.sh / README / .gitignore 放在 zip 根(对应 ~/dotfiles/ 下)
+  state.lastInstallSh = generateInstallSh(selectedPaths);
+  files['install.sh']  = enc.encode(state.lastInstallSh);
+  files['README.md']   = enc.encode(generateReadme());
+  files['.gitignore']  = enc.encode(document.getElementById('tpl-gitignore').textContent.trim());
+  return files;
+}
+
+// ===== 9. UI RENDER =====
+function renderStepper(){
+  const titles = ['备份本机','导入备份','比对','决定 & 生成'];
+  const el = document.getElementById('stepper');
+  el.innerHTML = titles.map((t,i)=>{
+    const n = i+1;
+    const cls = n === state.step ? 'active' : (n < state.step ? 'done' : '');
+    return `<div class="node ${cls}" data-go="${n}"><span class="n">${n}</span>${t}</div>`;
+  }).join('');
+  el.querySelectorAll('.node').forEach(node=>{
+    node.addEventListener('click', ()=>{
+      const go = +node.dataset.go;
+      if (go < state.step) gotoStep(go);
+    });
+  });
+}
+function renderStatus(){
+  const lc = Object.keys(activeFiles(state.local)).length;
+  const rc = Object.keys(state.remote.files).length;
+  const sel = Object.values(state.decisions).filter(d=>d.include).length;
+  document.getElementById('status-text').textContent =
+    `本机活跃 ${lc} 文件 · 导入 ${rc} 文件 · 已选 ${sel} 项 · 第 ${state.step}/4 步`;
+  const b = document.getElementById('redact-badge');
+  if (state.settings.includeSecrets){ b.textContent='⚠️ 含真实凭证'; b.className='badge danger'; }
+  else { b.textContent='🛡️ 脱敏中'; b.className='badge safe'; }
+}
+function renderStep(){
+  const body = document.getElementById('step-body');
+  if (state.step === 1) renderStep1(body);
+  else if (state.step === 2) renderStep2(body);
+  else if (state.step === 3) renderStep3(body);
+  else renderStep4(body);
+  renderStepper(); renderStatus();
+  updateNav();
+}
+function updateNav(){
+  document.getElementById('btn-prev').disabled = state.step === 1;
+  const next = document.getElementById('btn-next');
+  if (state.step === 4){ next.textContent = '生成基线包 ⬇'; }
+  else { next.textContent = '下一步 →'; }
+  // 启用条件
+  let can = true;
+  if (state.step === 1) can = Object.keys(state.local.files).length>0
+    && Object.values(state.local.categories).some(Boolean);
+  next.disabled = !can;
+}
+
+function fmtSize(n){ return n < 1024 ? n+' B' : n < 1024*1024 ? (n/1024).toFixed(1)+' KB' : (n/1024/1024).toFixed(1)+' MB'; }
+
+function renderStep1(body){
+  const stats = categoryStats(state.local);
+  const hasDir = !!state.local.pickedFolderName;
+  const fileCount = Object.keys(state.local.files).filter(p=>p!=='mcp-servers.json').length;
+  const mcpEntry = state.local.files['mcp-servers.json'];
+  const mcpCount = mcpEntry ? Object.keys(mcpEntry.json||{}).length : null;
+  body.innerHTML = `
+    <div class="card">
+      <h3>① 把 Claude 配置弄进来 —— 拖拽 / 选目录都行</h3>
+      <div id="dropzone" class="dropzone">
+        <div class="dz-big">📁 把 <code>~/.claude</code> 文件夹拖到这里</div>
+        <div class="dz-sub">想顺带同步 MCP?把 <code>~/.claude.json</code> 一起选中、一起拖进来即可</div>
+        <div class="dz-sub muted">拖了没反应?Chrome 在 <code>file://</code> 下偶尔不收文件夹 —— 直接点下方「📂 选择目录」一定行。</div>
+        <div class="dz-or">—— 或 ——</div>
+        <div class="row" style="justify-content:center">
+          <label class="btn primary">📂 选择目录
+            <input type="file" id="pick-claude-dir" webkitdirectory class="hidden-input">
+          </label>
+          <label class="btn ghost">📄 单独选 ~/.claude.json
+            <input type="file" id="pick-claude-json" accept=".json" class="hidden-input">
+          </label>
+        </div>
+      </div>
+
+      <details class="help" open>
+        <summary>📍 第一次用 / 找不到?点开看最省事的三步(隐藏文件不用愁)</summary>
+        <ol>
+          <li>打开 <b>Finder</b>,按 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd>,粘贴 <code>~/.claude</code> 回车 —— 直接到该目录,不用一层层翻。</li>
+          <li>把整个 <b>.claude</b> 文件夹<i>拖</i>到上面虚线框里。要 MCP 的话,再 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> 粘贴 <code>~/.claude.json</code>,把它和文件夹一起选中、一起拖进来。</li>
+          <li>不想拖?点「选择目录」,弹窗里同样按 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> → 输入 <code>~/.claude</code> 回车 → 点「选择」。</li>
+        </ol>
+        <p class="small muted" style="margin-top:8px">
+          <b>关于 <code>~</code>:</b>就是你的用户目录(Finder 边栏的小房子图标)。所有弹窗都接受 <code>~</code>,<b>不用</b>展开成 <code>/Users/你的名字</code>。<br>
+          <b>看不到 <code>.claude</code>?</b>它是以 <code>.</code> 开头的隐藏文件夹 —— Mac 按 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>.</kbd> 切换显示;Windows 在资源管理器「查看 → 隐藏的项目」。<br>
+          <b>偷懒:</b>点「选择目录」后,直接选边栏小房子(Home),本工具会自动从中挑出 <code>.claude/</code> 和 <code>.claude.json</code>。⚠ Home 大,浏览器要扫一遍整个用户目录,可能要等十几秒。
+        </p>
+      </details>
+
+      <div id="pick-err" class="small" style="color:var(--err);margin-top:8px"></div>
+
+      ${hasDir?`
+      <div class="okbox">
+        <b>✅ 已读取:</b> ${fileCount} 个配置文件 · 自定义 skill ${stats['skills/']?.count||0} 个
+        ${mcpCount!=null?` · MCP servers ${mcpCount} 个`:' · <span class="small">MCP 未读取(可选,要的话点「单独选 ~/.claude.json」)</span>'}
+      </div>`:''}
+    </div>
+
+    <div class="card">
+      <h3>② 勾选要纳入同步的类别</h3>
+      ${CATEGORY_ORDER.map(c=>{
+        const s = stats[c]; const checked = state.local.categories[c] ? 'checked' : '';
+        const cls = s.present ? '' : 'missing';
+        const meta = s.present ? `${s.count} 文件 · ${fmtSize(s.size)}` : '(未找到)';
+        return `<div class="cat ${cls}">
+          <input type="checkbox" data-cat="${c}" ${checked} ${s.present?'':'disabled'}>
+          <span class="name">${CATEGORY_LABEL[c]}</span>
+          <span class="meta">${meta}</span>
+        </div>`;
+      }).join('')}
+      <p class="small muted" style="margin-top:8px">带 LICENSE 的官方/插件 skill 已自动排除(canvas-design / pdf / pptx …),只保留你手写的。</p>
+    </div>
+  `;
+  // 拖拽
+  const dz = document.getElementById('dropzone');
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.add('hover');}));
+  ['dragleave','dragend'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.remove('hover');}));
+  dz.addEventListener('drop', async (e)=>{
+    e.preventDefault(); dz.classList.remove('hover');
+    const errEl = document.getElementById('pick-err');
+    try {
+      const { entries, diag } = await entriesFromDrop(e.dataTransfer);
+      console.log('[sync.html 拖入诊断]', diag, '→ 收集到', entries.length, '个文件;前几个:', entries.slice(0,6).map(x=>x.relPath));
+      if (!entries.length){
+        // file:// 下 Chrome 偶发不交出拖入文件夹的内容(entries API 哑火)—— 已知限制,不是用户拖错
+        errEl.innerHTML = '拖入没收到任何文件。Chrome 在 <code>file://</code> 下偶尔不把拖入文件夹的内容交给网页(已知限制)。<b>请改用上方「📂 选择目录」按钮</b> —— 它走另一条更可靠的通道,一定能读出来。诊断信息已打印到控制台(按 <kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd> 打开 → Console 可见)。';
+        return;
+      }
+      await processEntries(entries, '拖入');
+    }
+    catch(err){ errEl.textContent='拖入失败: '+err.message; console.error('[sync.html] drop error', err); }
+  });
+  // 选择目录(支持选 .claude 本身,或整个 Home,ingest 都认)
+  document.getElementById('pick-claude-dir').addEventListener('change', async (e)=>{
+    try { await processEntries(entriesFromFileList(e.target.files), '目录选择'); }
+    catch(err){ document.getElementById('pick-err').textContent='读取失败: '+err.message; }
+    e.target.value = '';
+  });
+  // 单独选 ~/.claude.json(标签这么写,默认用户就是选的这个文件)
+  document.getElementById('pick-claude-json').addEventListener('change', async (e)=>{
+    const f = e.target.files[0]; if (!f) return;
+    const r = await parseMcpFile(f);
+    const err = document.getElementById('pick-err');
+    if (r.error){ err.textContent='.claude.json 解析失败: '+r.error; return; }
+    err.textContent='';
+    state.local.files['mcp-servers.json'] = r.mcpFile;
+    state.local.categories.mcpServers = true;
+    renderStep();
+    e.target.value = '';
+  });
+  // 类别勾选
+  body.querySelectorAll('input[data-cat]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{ state.local.categories[cb.dataset.cat] = cb.checked; renderStatus(); });
+  });
+}
+
+function renderStep2(body){
+  const has = !!state.remote.archiveName;
+  const rc = Object.keys(state.remote.files).length;
+  body.innerHTML = `
+    <div class="card">
+      <h3>导入另一台机器的备份(本工具导出的 .zip)</h3>
+      <div class="row">
+        <label class="btn primary">${has?'重新导入':'选择 .zip 文件'}
+          <input type="file" id="pick-archive" accept=".zip,.tgz,.tar.gz" class="hidden-input">
+        </label>
+        ${has?`<span class="small muted">已导入:${state.remote.archiveName} → ${rc} 文件</span>`:'<span class="small muted">另一台机器用 sync.html 导出后, AirDrop/U盘 传过来</span>'}
+      </div>
+      <div id="archive-err" class="small" style="color:var(--err);margin-top:6px"></div>
+    </div>
+    <div class="card">
+      <h3>或:跳过导入</h3>
+      <p class="small muted">如果你只想把本机配置直接打包成基线(单机导出,不做比对),可以跳过。下一步直接进入「决定 & 生成」。</p>
+      <button id="skip-import" class="ghost">跳过导入,直接打包本机</button>
+    </div>
+  `;
+  document.getElementById('pick-archive').addEventListener('change', async (e)=>{
+    const f = e.target.files[0]; if (!f) return;
+    const err = document.getElementById('archive-err'); err.textContent='';
+    try {
+      const { files } = await readArchive(f);
+      state.remote.files = files;
+      state.remote.categories = {};
+      Object.keys(files).forEach(p=>{ const c=categorize(p); if(c) state.remote.categories[c]=true; });
+      state.remote.archiveName = f.name;
+      renderStep();
+    } catch(ex){ err.textContent = ex.message; }
+  });
+  document.getElementById('skip-import').addEventListener('click', ()=>{
+    state.remote.files = {}; state.remote.archiveName=''; state.remote.categories={};
+    state.diff = computeDiff(); initDecisions(); gotoStep(4);
+  });
+}
+
+function statusPill(s){
+  const map = { same:['both-same','🟢 相同','same'], differ:['both-differ','🟡 不同','differ'],
+                'only-local':['only-local','🔵 仅本机','onlyL'], 'only-remote':['only-remote','🟣 仅导入','onlyR'] };
+  const [_,label,cls] = map[s]; return `<span class="pill ${cls}">${label}</span>`;
+}
+function isListPath(path){
+  return path === 'mcp-servers.json' || path === 'plugins/installed_plugins.json';
+}
+function listKeys(path, f){
+  if (!f) return [];
+  if (path === 'mcp-servers.json') return Object.keys(f.json || {});
+  if (path === 'plugins/installed_plugins.json'){ try { return Object.keys(JSON.parse(f.text).plugins||{}); } catch(e){ return []; } }
+  return [];
+}
+function renderStep3(body){
+  if (!state.diff) state.diff = computeDiff();
+  const diff = state.diff;
+  // 按类别分组
+  const groups = {};
+  for (const it of diff){ (groups[it.category] = groups[it.category] || []).push(it); }
+  const order = CATEGORY_ORDER.filter(c=>groups[c]);
+  body.innerHTML = `
+    <div class="card">
+      <h3>比对结果(本机 ↔ 导入)</h3>
+      <p class="small muted">绿色=相同 · 黄色=两边都有但内容不同 · 蓝=仅本机 · 紫=仅导入。点条目展开看差异。下一步决定取舍。</p>
+    </div>
+    ${order.map(c=>`
+      <div class="card">
+        <h3>${CATEGORY_LABEL[c]}</h3>
+        <table><tbody>
+        ${groups[c].map(it=>{
+          const expandable = (it.status==='differ') || isListPath(it.path);
+          return `<tr>
+            <td style="width:120px">${statusPill(it.status)}</td>
+            <td>
+              <div><code>${it.path}</code></div>
+              ${expandable?`<details class="diff"><summary>查看差异</summary><div class="diffbody" data-path="${it.path}"></div></details>`:''}
+            </td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>
+      </div>`).join('')}
+  `;
+  // 填充 diff 体
+  body.querySelectorAll('.diffbody').forEach(db=>{
+    const path = db.dataset.path;
+    const L = activeFiles(state.local), R = state.remote.files;
+    if (isListPath(path)){
+      const aK = listKeys(path, L[path]), bK = listKeys(path, R[path]);
+      const d = setDiff(aK, bK);
+      db.innerHTML = `<div class="setview">
+        <div class="col set-L"><h4>本机 (${aK.length})</h4><ul>${aK.map(k=>`<li>${k}${d.onlyA.includes(k)?'<span class="tag">仅本机</span>':''}</li>`).join('')}</ul></div>
+        <div class="col set-R"><h4>导入 (${bK.length})</h4><ul>${bK.map(k=>`<li>${k}${d.onlyB.includes(k)?'<span class="tag">仅导入</span>':''}</li>`).join('')}</ul></div>
+      </div>`;
+    } else {
+      const { ops, truncated } = lineDiff(fileText(path,L[path]||{text:''}), fileText(path,R[path]||{text:''}));
+      const html = ops.map(o=>{
+        const esc = (o.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        return `<div class="diffline ${o.type}">${o.type==='add'?'+ ':o.type==='del'?'- ':'  '}${esc}</div>`;
+      }).join('');
+      db.innerHTML = (truncated?'<div class="diffline ctx">⟨已截断⟩</div>':'')+html;
+    }
+  });
+}
+
+function initDecisions(){
+  state.decisions = {};
+  for (const it of (state.diff||[])){
+    let pick = 'local';
+    if (it.status === 'only-remote') pick = 'remote';
+    state.decisions[it.path] = { include:true, pick, mergedText:'' };
+  }
+}
+function renderStep4(body){
+  if (!state.diff){ state.diff = computeDiff(); initDecisions(); }
+  if (!state.decisions || Object.keys(state.decisions).length !== state.diff.length) initDecisions();
+  const groups = {};
+  for (const it of state.diff){ (groups[it.category] = groups[it.category] || []).push(it); }
+  const order = CATEGORY_ORDER.filter(c=>groups[c]);
+  body.innerHTML = `
+    <div class="card">
+      <h3>决定哪些纳入同步基线</h3>
+      <p class="small muted">勾选=纳入。两边都有的不同项,选「本机 / 导入 / 手动合并」。最后点「生成基线包」下载 zip + install.sh。</p>
+      <div class="row" style="margin-top:8px">
+        <button id="gen" class="primary">生成基线包 ⬇</button>
+        <span class="small muted" id="gen-summary"></span>
+      </div>
+    </div>
+    ${order.map(c=>`
+      <div class="card">
+        <h3>${CATEGORY_LABEL[c]}</h3>
+        ${groups[c].map(it=>{
+          const d = state.decisions[it.path];
+          const sideNote = it.status==='only-local'?'(来自本机)':it.status==='only-remote'?'(来自导入)':'';
+          if (it.status === 'differ'){
+            return `<div class="cat">
+              <input type="checkbox" data-path="${it.path}" data-act="include" ${d.include?'checked':''}>
+              <div style="flex:1">
+                <div><code>${it.path}</code> ${statusPill(it.status)} ${sideNote}</div>
+                <div class="row" style="margin-top:4px">
+                  <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="local" ${d.pick==='local'?'checked':''}> 本机</label>
+                  <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="remote" ${d.pick==='remote'?'checked':''}> 导入</label>
+                  <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="merged" ${d.pick==='merged'?'checked':''}> 手动合并</label>
+                </div>
+                <textarea class="merged" data-path="${it.path}" data-act="merged" ${d.pick!=='merged'?'disabled':''} placeholder="选手动合并后在此编辑…">${d.pick==='merged'?(d.mergedText||''):''}</textarea>
+              </div>
+            </div>`;
+          }
+          return `<div class="cat">
+            <input type="checkbox" data-path="${it.path}" data-act="include" ${d.include?'checked':''}>
+            <div style="flex:1"><div><code>${it.path}</code> ${statusPill(it.status)} ${sideNote}</div></div>
+          </div>`;
+        }).join('')}
+      </div>`).join('')}
+    <div class="card" id="gen-output" style="display:none">
+      <h3>生成的 install.sh(复制到终端跑)</h3>
+      <div class="row" style="margin-bottom:8px"><button id="copy-install" class="ghost">📋 复制</button><span class="small muted" id="copy-msg"></span></div>
+      <pre class="installsh" id="install-pre"></pre>
+    </div>
+  `;
+  updateGenSummary();
+
+  body.querySelectorAll('input[data-act="include"]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{ state.decisions[cb.dataset.path].include = cb.checked; updateGenSummary(); renderStatus(); });
+  });
+  body.querySelectorAll('input[data-act="pick"]').forEach(r=>{
+    r.addEventListener('change', ()=>{
+      const d = state.decisions[r.dataset.path]; d.pick = r.dataset.val;
+      const ta = body.querySelector(`textarea[data-path="${r.dataset.path}"]`);
+      if (d.pick === 'merged'){
+        ta.disabled = false;
+        if (!d.mergedText){
+          const L = activeFiles(state.local);
+          d.mergedText = fileText(r.dataset.path, L[r.dataset.path] || state.remote.files[r.dataset.path]);
+          ta.value = d.mergedText;
+        }
+      } else { ta.disabled = true; }
+    });
+  });
+  body.querySelectorAll('textarea[data-act="merged"]').forEach(ta=>{
+    ta.addEventListener('input', ()=>{ state.decisions[ta.dataset.path].mergedText = ta.value; });
+  });
+  document.getElementById('gen').addEventListener('click', generateAndDownload);
+  document.getElementById('copy-install').addEventListener('click', ()=>{
+    navigator.clipboard.writeText(state.lastInstallSh).then(()=>{
+      document.getElementById('copy-msg').textContent = '已复制 ✓';
+      setTimeout(()=>document.getElementById('copy-msg').textContent='', 1500);
+    });
+  });
+}
+function updateGenSummary(){
+  const el = document.getElementById('gen-summary');
+  if (!el) return;
+  const n = Object.values(state.decisions).filter(d=>d.include).length;
+  el.textContent = `将纳入 ${n} 项`;
+}
+
+// ===== 生成 & 下载 =====
+function generateAndDownload(){
+  const files = buildBaselineFiles();
+  const zipBytes = writeZip(files);
+  const blob = new Blob([zipBytes], {type:'application/zip'});
+  const date = new Date().toISOString().slice(0,10);
+  downloadBlob(blob, `claude-baseline-${date}.zip`);
+  // 显示 install.sh
+  document.getElementById('gen-output').style.display = '';
+  document.getElementById('install-pre').textContent = state.lastInstallSh;
+  toast(`已生成:claude-baseline-${date}.zip(${Object.keys(files).length} 文件)`);
+}
+
+// ===== 10. WIRING =====
+function gotoStep(n){
+  // 进入比对前算 diff;进入决定前确保 decisions 初始化
+  if (n === 3){ state.diff = computeDiff(); }
+  if (n === 4){ if (!state.diff) state.diff = computeDiff(); initDecisions(); }
+  state.step = n; renderStep(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function toast(msg){
+  const t = document.createElement('div'); t.className='toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),400); }, 2200);
+}
+function downloadBlob(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+document.getElementById('btn-prev').addEventListener('click', ()=>{ if (state.step>1) gotoStep(state.step-1); });
+document.getElementById('btn-next').addEventListener('click', ()=>{
+  if (state.step < 4) gotoStep(state.step+1);
+  else generateAndDownload();
+});
+
+// boot
+loadSettings();
+bindSettings();
+renderStep();
+</script>
+</body>
+</html>
