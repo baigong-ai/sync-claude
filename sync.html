@@ -123,11 +123,46 @@
       </label>
       <label>输出目录(生成的 install.sh 用)<input type="text" id="set-outputdir" placeholder="~/dotfiles"></label>
     </div>
+
+    <div class="help" style="margin-top:10px">
+      <p class="small" style="margin:0 0 6px">
+        🔒 <b>在线 git 服务(GitHub / GitLab / Gitee / Gitea 等):仓库务必设为 <code>Private</code></b> —— 配置里有你的个人指令和使用习惯,即使脱敏也不宜公开。
+      </p>
+      <p class="small" style="margin:0">
+        ⚠️ <b>推送到 public 仓库时,强烈建议不要包含 token / API key / Authorization 头等敏感信息</b> —— 一旦公开即视为永久泄露,在凭证失效前任何人都能盗用。默认脱敏就是为此:若非要 push public,务必保持下方「本次包含真实凭证」<b>不勾选</b>。
+      </p>
+    </div>
+
+    <details class="help" style="margin-top:8px">
+      <summary>Git 地址怎么填?看例子 / 怎么建 GitHub 私有仓库</summary>
+      <p class="small" style="margin:8px 0 4px"><b>填法:</b>「Git Server」填域名,「仓库(repo)名」填 <code>用户名/仓库名</code>,再选协议。拼出来的完整地址:</p>
+      <ul class="small" style="margin:0 0 8px; padding-left:22px; line-height:1.8">
+        <li>GitHub · ssh:<br><code>git@github.com:你的用户名/dotfiles.git</code></li>
+        <li>GitHub · https:<br><code>https://github.com/你的用户名/dotfiles.git</code></li>
+        <li>自建 git server · ssh:<br><code>git@gitea.example.com:你的用户名/dotfiles.git</code></li>
+        <li>自建 git server · https:<br><code>https://gitea.example.com/你的用户名/dotfiles.git</code></li>
+      </ul>
+      <p class="small muted" style="margin:0 0 6px">ssh 推荐配好 SSH key 后用(免输密码);https 在首次 push 时输用户名 + Personal Access Token。</p>
+
+      <details class="okbox" style="margin-top:8px">
+        <summary class="small"><b>📋 在 GitHub 建一个 Private 仓库(点开看步骤)</b></summary>
+        <ol class="small" style="margin:8px 0 0; padding-left:22px; line-height:1.8">
+          <li>登录 GitHub → 右上角 <kbd>+</kbd> → <b>New repository</b>。</li>
+          <li>Repository name 填 <code>dotfiles</code>(名字随意,后面要对上)。</li>
+          <li><b>选 Private</b>(关键 —— 不要选 Public)。</li>
+          <li>可勾上 <b>Add a README file</b>(方便后续 clone)。</li>
+          <li>点 <b>Create repository</b>。</li>
+          <li>回到本工具:Git Server 填 <code>github.com</code>,repo 名填 <code>你的用户名/dotfiles</code>,协议按你配的 key 选 ssh 或 https。</li>
+        </ol>
+        <p class="small muted" style="margin:8px 0 0">GitLab / Gitee / Gitea / 自建 Forgejo 步骤几乎一样:新建仓库时选 Private 即可;Server 域名换成对应的就行。</p>
+      </details>
+    </details>
+
     <div class="danger" id="danger-zone">
       <div class="row">
         <label class="row" style="flex-direction:row;gap:6px;font-size:13px;color:var(--ink);">
           <input type="checkbox" id="set-secrets"> <b>本次包含真实凭证</b>
-          <span class="small muted">勾选后,token / API key / Authorization 头的<b>真实值</b>会进入导出 zip(默认全部脱敏)</span>
+          <span class="small muted">勾选=zip 保留真实 token / key(<b>个人设备间同步可省去各机重填</b>);默认脱敏,适合 push 到 git 或发给别人。随时可切,重新生成即生效。</span>
         </label>
       </div>
       <div class="row" style="margin-top:8px;">
@@ -316,13 +351,11 @@ function bindSettings(){
     if (key === 'includeSecrets'){
       el.checked = !!state.settings.includeSecrets;
       el.addEventListener('change', ()=>{
-        if (el.checked && !confirm('⚠ 开启后,token / API key / Authorization 头的【真实值】会进入导出 zip。\n该 zip 视为机密:git 仓库必须 private,或干脆不入库。确定?')){
+        if (el.checked && !confirm('勾选后,zip 里会保留真实 token / API key / Authorization —— 个人设备间同步这样最省事(各机不用重填凭证)。\n唯一留意:这套配置若要 push 到 git,仓库务必 private;别把含真实凭证的 zip 发到公开渠道。确定?')){
           el.checked = false; return;
         }
         state.settings.includeSecrets = el.checked;
         updateDanger(); saveSettings(); renderStatus();
-        // 凭证开关变化 → 若已有快照,提示重新选目录以刷新
-        if (Object.keys(state.local.files).length) toast('凭证开关变了:请重新选择 ~/.claude 以刷新');
       });
     } else {
       el.value = state.settings[key] || '';
