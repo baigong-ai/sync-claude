@@ -478,15 +478,16 @@ for item in "${ITEMS[@]}"; do
   ln -snf "$target" "$link"; echo "✓ $item → $target"
 done
 
-# --- MCP servers:user scope 导入(env/headers 是占位,需手填真值)---
+# --- MCP servers:user scope 导入 ---
 MCP_JSON="$SRC/mcp-servers.json"
 if [ -f "$MCP_JSON" ] && command -v claude >/dev/null 2>&1; then
   echo "=== 导入 MCP servers (user scope) ==="
   PYBIN="${CC_PYTHON:-$HOME/.venvs/cc-data/bin/python}"
   command -v "$PYBIN" >/dev/null 2>&1 || PYBIN=python3
-  "$PYBIN" - "$MCP_JSON" <<'PY'
-import json, subprocess, sys
+  INCLUDE_SECRETS="{{INCLUDE_SECRETS}}" "$PYBIN" - "$MCP_JSON" <<'PY'
+import json, subprocess, sys, os
 mcp = json.load(open(sys.argv[1]))
+sec = os.environ.get("INCLUDE_SECRETS")=="1"   # 1=zip 已含真实凭证,无需手填;0=已脱敏,占位需手填
 added=skipped=failed=0
 for name, cfg in mcp.items():
     chk=subprocess.run(["claude","mcp","get",name],capture_output=True,text=True)
@@ -495,13 +496,20 @@ for name, cfg in mcp.items():
     try:
         subprocess.run(["claude","mcp","add-json",name,json.dumps(cfg),"-s","user"],
                        check=True,capture_output=True,text=True)
-        ek=list((cfg.get("env") or {}).keys()); hk=list((cfg.get("headers") or {}).keys())
-        todo=([f"env={ek}"] if ek else [])+([f"headers={hk}"] if hk else [])
-        print(f"  ✓ 新增: {name}"+(("  ⚠ 待填: "+", ".join(todo)) if todo else "")); added+=1
+        if not sec:
+            ek=list((cfg.get("env") or {}).keys()); hk=list((cfg.get("headers") or {}).keys())
+            todo=([f"env={ek}"] if ek else [])+([f"headers={hk}"] if hk else [])
+            note=("  ⚠ 待填: "+", ".join(todo)) if todo else ""
+        else:
+            note="  ✓ 凭证已含"
+        print(f"  ✓ 新增: {name}"+note); added+=1
     except subprocess.CalledProcessError as e:
         print(f"  ✗ 失败: {name} — {(e.stderr or '').strip() or e}"); failed+=1
 print(f"\n  汇总: 新增 {added}, 跳过 {skipped}, 失败 {failed}")
-print("  提示:env/headers 是 ***REDACTED*** 占位,需手动填回真实凭证")
+if sec:
+    print("  提示:本次未脱敏,env/headers 已含真实凭证,无需手填")
+else:
+    print("  提示:env/headers 是 ***REDACTED*** 占位,需手动填回真实凭证")
 PY
 elif [ -f "$MCP_JSON" ]; then
   echo "⚠ 发现 $MCP_JSON 但本机无 claude 命令,跳过 MCP 导入"
@@ -529,11 +537,7 @@ echo "完成。验证: ls -la $CLAUDE_HOME"
 
 ## 敏感凭证(token / API key / Authorization)
 
-不在本仓库里。请各自填到:
-- shell 环境变量(推荐):~/.zshrc 里 `export ANTHROPIC_AUTH_TOKEN=...`;
-- 或 ~/.claude/settings.local.json(已被 .gitignore 排除)。
-
-MCP server 的 env/headers:导入后编辑 ~/.claude.json,把 ***REDACTED*** 占位换成真值。
+{{SECRET_NOTE}}
 
 ## 日常同步
 
@@ -1044,14 +1048,25 @@ function generateInstallSh(selectedPaths){
     .replaceAll('{{DATE}}',   new Date().toISOString().slice(0,10))
     .replaceAll('{{OUTPUT_DIR}}', state.settings.outputDir || '~/dotfiles')
     .replaceAll('{{GIT_URL}}', url)
-    .replaceAll('{{ITEMS}}',  items.join(' '));
+    .replaceAll('{{ITEMS}}',  items.join(' '))
+    .replaceAll('{{INCLUDE_SECRETS}}', state.settings.includeSecrets ? '1' : '0');
 }
 function generateReadme(){
   const tpl = document.getElementById('tpl-readme').textContent.trim();
+  const sec = state.settings.includeSecrets;
+  const secretNote = sec
+    ? ['本次未脱敏:zip 已含真实 token / API key / Authorization。⚠ 这意味着:',
+       '  - 本包只能用于个人设备间同步,切勿放进 public 仓库或发给他人;',
+       '  - settings.json 的 token 也可改放 shell 环境变量(~/.zshrc export)或 ~/.claude/settings.local.json(已被 .gitignore 排除),更稳妥;',
+       '  - 一旦本包流出,视为凭证泄露,请立即在各平台轮换。'].join('\n')
+    : ['默认脱敏:zip 里的 token / API key / Authorization 已替换为 ***REDACTED***,各机器需各自填回真值:',
+       '  - settings.json 的 token → shell 环境变量(~/.zshrc export)或 ~/.claude/settings.local.json(已被 .gitignore 排除);',
+       '  - MCP server 的 env/headers → 导入后编辑 ~/.claude.json,把 ***REDACTED*** 占位换成真值。'].join('\n');
   return tpl
     .replaceAll('{{DATE}}',   new Date().toISOString().slice(0,10))
     .replaceAll('{{OUTPUT_DIR}}', state.settings.outputDir || '~/dotfiles')
-    .replaceAll('{{GIT_URL}}', gitUrl() || '(本地 zip)');
+    .replaceAll('{{GIT_URL}}', gitUrl() || '(本地 zip)')
+    .replaceAll('{{SECRET_NOTE}}', secretNote);
 }
 function buildBaselineFiles(){
   // 生成 zip 内容:{ 'claude/<path>': bytes, 'install.sh':..., 'README.md':..., '.gitignore':... }
