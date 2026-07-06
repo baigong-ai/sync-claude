@@ -5,116 +5,377 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>sync-claude · 配置合并向导</title>
 <!--
-  sync.html — Claude Code 配置合并向导(单文件,双击即用,零 Web Server)。
+  sync-claude.html — Claude Code 配置合并向导(单文件,双击即用,零 Web Server)。
   纯前端:webkitdirectory 读 ~/.claude、单文件读 ~/.claude.json、手写 STORE-only zip。
   脱敏规则镜像 scripts/pack-claude-config.sh。生成的 install.sh 是 Mac-first。
   详细方案见项目根 plan / README。
 -->
 <style>
   :root{
-    --bg:#fafafa; --card:#fff; --ink:#1a1a1a; --mute:#666; --line:#e2e2e2;
-    --accent:#2563eb; --accent-bg:#eef4ff; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
-    --same:#16a34a; --differ:#d97706; --onlyL:#2563eb; --onlyR:#9333ea; --off:#9ca3af;
+    /* paper / ink */
+    --paper:#f1ebde; --paper-d:#e8dfca;
+    --card:#fbf6ec; --card-h:#f6efdf;
+    --ink:#221d17; --ink-2:#4a4137; --mute:#7a6f5e;
+    --rule:#d6c9b1; --rule-l:#e4dac5;
+    /* accents */
+    --accent:#8a2c25; --accent-d:#6e211c; --accent-bg:#f1e0d8;
+    --gold:#9a6a1f; --gold-bg:#f4e8cf; --ok:#3f6b3a; --ok-bg:#e2ead7;
+    /* status */
+    --same:#3f6b3a;   --same-bg:#e4ece0;
+    --differ:#9a5817; --differ-bg:#f1e2c8;
+    --onlyL:#2f5189;  --onlyL-bg:#d9e3f1;
+    --onlyR:#5e3563;  --onlyR-bg:#e6d8e8;
+    --off:#8d8270;
+    --serif:"New York","Iowan Old Style","Palatino Linotype",Palatino,"Hoefler Text",Georgia,"Songti SC",STSong,serif;
+    --mono:"SF Mono","JetBrains Mono",Menlo,Monaco,ui-monospace,"Cascadia Code","Roboto Mono",monospace;
+    --r:3px; --r-lg:5px;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-       background:var(--bg);color:var(--ink);}
-  header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);
-         padding:12px 20px;display:flex;align-items:center;gap:12px;}
-  header h1{font-size:16px;margin:0;font-weight:600;}
-  header .sub{color:var(--mute);font-size:12px;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font:14.5px/1.62 var(--serif);
+    color:var(--ink);
+    background:var(--paper);
+    background-image:
+      radial-gradient(1200px 600px at 12% -8%, rgba(255,255,255,.55), transparent 60%),
+      radial-gradient(900px 500px at 105% 110%, rgba(138,44,37,.05), transparent 55%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.13  0 0 0 0 0.11  0 0 0 0 0.09  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ::selection{background:var(--accent);color:#fbf6ec;}
+
+  /* ── header / wordmark ─────────────────────────────── */
+  header{
+    position:sticky;top:0;z-index:10;
+    background:linear-gradient(var(--card),rgba(251,246,236,.92));
+    backdrop-filter:saturate(140%) blur(6px);
+    border-bottom:1px solid var(--rule);
+    box-shadow:0 1px 0 var(--rule-l) inset;
+    padding:13px 26px;display:flex;align-items:center;gap:14px;
+  }
+  header::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--rule-l);}
+  .wordmark{display:flex;align-items:center;gap:11px;}
+  .wordmark .mark{
+    width:26px;height:26px;flex:none;position:relative;
+    font-family:var(--mono);font-weight:700;font-size:14px;
+    color:var(--accent);background:var(--accent-bg);
+    border:1px solid var(--accent);border-radius:var(--r);
+    display:grid;place-items:center;
+    box-shadow:0 0 0 2px var(--card) inset;
+  }
+  .wordmark .mark::before,.wordmark .mark::after{
+    content:"";position:absolute;width:5px;height:5px;border:1px solid var(--ink);
+  }
+  .wordmark .mark::before{top:-3px;left:-3px;border-right:none;border-bottom:none;}
+  .wordmark .mark::after{bottom:-3px;right:-3px;border-left:none;border-top:none;}
+  header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.01em;font-family:var(--serif);}
+  header .sub{
+    color:var(--mute);font-size:11.5px;font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.14em;padding-left:13px;
+    border-left:1px solid var(--rule);margin-left:2px;
+  }
   header .spacer{flex:1}
-  .wrap{max-width:920px;margin:0 auto;padding:20px;}
-  details#settings-panel{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:16px;padding:10px 14px;}
-  details#settings-panel summary{cursor:pointer;font-weight:600;color:var(--mute);}
-  details#settings-panel[open] summary{color:var(--ink);margin-bottom:10px;}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
-  .grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute);}
-  .grid input,.grid select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;}
+  #zip-mode{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;
+    color:var(--mute);opacity:.85;
+  }
+
+  /* ── layout shell ──────────────────────────────────── */
+  .wrap{max-width:940px;margin:0 auto;padding:26px 24px 64px;position:relative;}
+  /* crop marks framing the workbench */
+  .wrap::before,.wrap::after{
+    content:"";position:absolute;width:14px;height:14px;border:1px solid var(--rule);
+    pointer-events:none;opacity:.7;
+  }
+  .wrap::before{top:10px;left:8px;border-right:none;border-bottom:none;}
+  .wrap::after{bottom:50px;right:8px;border-left:none;border-top:none;}
+
+  /* ── panels / details ──────────────────────────────── */
+  details#settings-panel{
+    background:var(--card);border:1px solid var(--rule);border-radius:var(--r-lg);
+    margin-bottom:18px;padding:13px 18px;
+    box-shadow:0 1px 0 var(--rule-l) inset, 0 1px 2px rgba(60,40,20,.04);
+  }
+  details#settings-panel summary{
+    cursor:pointer;font-weight:700;font-family:var(--serif);font-size:14.5px;color:var(--ink-2);
+    letter-spacing:-.005em;list-style:none;
+  }
+  details#settings-panel summary::-webkit-details-marker{display:none;}
+  details#settings-panel summary::before{content:"§ ";color:var(--accent);font-family:var(--mono);font-weight:600;margin-right:2px;}
+  details#settings-panel summary::after{content:" ▾";color:var(--mute);font-size:11px;}
+  details#settings-panel[open] summary{color:var(--ink);margin-bottom:12px;border-bottom:1px solid var(--rule-l);padding-bottom:10px;}
+  details#settings-panel[open] summary::after{content:" ▴";}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px 18px;}
+  .grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--mute);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;}
+  .grid input,.grid select{
+    padding:7px 9px;border:1px solid var(--rule);border-radius:var(--r);
+    font:13px/1.4 var(--mono);color:var(--ink);background:rgba(255,255,255,.5);
+  }
+  .grid input:focus,.grid select:focus{outline:2px solid var(--accent-bg);border-color:var(--accent);}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-  .danger{border:1px solid var(--warn);background:#fffbeb;border-radius:8px;padding:10px 14px;margin-top:10px;}
-  .danger.on{background:#fef3c7;}
-  button,.btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 14px;
-              border-radius:6px;font-size:13px;cursor:pointer;}
-  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
-  button.primary:disabled{background:#9db8ee;border-color:#9db8ee;cursor:not-allowed;}
-  button.ghost{background:transparent;}
-  /* stepper */
-  nav#stepper{display:flex;gap:6px;margin-bottom:18px;}
-  nav#stepper .node{flex:1;text-align:center;padding:10px 6px;border:1px solid var(--line);border-radius:8px;
-                    background:var(--card);font-size:12px;color:var(--mute);cursor:pointer;position:relative;}
-  nav#stepper .node .n{display:block;font-size:15px;font-weight:700;color:var(--ink);}
-  nav#stepper .node.active{border-color:var(--accent);background:var(--accent-bg);}
-  nav#stepper .node.done{border-color:var(--ok);color:var(--ok);}
-  nav#stepper .node.done .n:after{content:" ✓";}
-  /* cards */
-  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px;}
-  .card h3{margin:0 0 10px;font-size:14px;}
-  .cat{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f0f0f0;}
+  .danger{border:1px solid var(--gold);background:var(--gold-bg);border-left-width:3px;border-radius:var(--r);padding:11px 14px;margin-top:12px;}
+  .danger.on{background:#efdcbb;box-shadow:0 0 0 2px rgba(154,106,31,.18) inset;}
+
+  /* ── buttons ───────────────────────────────────────── */
+  button,.btn{
+    appearance:none;border:1px solid var(--rule);background:var(--card);color:var(--ink);
+    padding:8px 16px;border-radius:var(--r);font:13px/1 var(--serif);font-weight:600;
+    cursor:pointer;transition:background .15s, border-color .15s, transform .06s, box-shadow .15s;
+    letter-spacing:-.005em;
+  }
+  button:hover,.btn:hover{background:var(--card-h);border-color:var(--ink-2);}
+  button:active,.btn:active{transform:translateY(1px);}
+  button.primary{
+    background:var(--accent);border-color:var(--accent-d);color:#fbf6ec;
+    box-shadow:0 1px 0 var(--accent-d) inset, 0 1px 2px rgba(110,33,28,.25);
+  }
+  button.primary:hover{background:var(--accent-d);border-color:var(--accent-d);}
+  button.primary:disabled{background:#c9a59e;border-color:#c9a59e;color:#f6efdf;cursor:not-allowed;box-shadow:none;}
+  button.ghost{background:transparent;border-color:var(--rule);}
+  button.ghost:hover{background:var(--card-h);border-color:var(--ink-2);}
+
+  /* ── stepper / chapter spine ───────────────────────── */
+  nav#stepper{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:22px;
+    border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+    background:linear-gradient(var(--card),rgba(251,246,236,.6));
+  }
+  nav#stepper .node{
+    text-align:left;padding:14px 16px 14px 18px;cursor:pointer;position:relative;
+    color:var(--mute);border-right:1px solid var(--rule-l);
+    display:flex;align-items:baseline;gap:10px;
+  }
+  nav#stepper .node:last-child{border-right:none;}
+  nav#stepper .node .n{
+    font-family:var(--serif);font-size:24px;font-weight:700;line-height:1;
+    color:var(--rule);letter-spacing:-.02em;transition:color .2s;
+  }
+  nav#stepper .node .t{font-size:13px;font-family:var(--serif);}
+  nav#stepper .node:hover .n{color:var(--ink-2);}
+  nav#stepper .node.active{background:var(--accent-bg);}
+  nav#stepper .node.active::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);}
+  nav#stepper .node.active .n,nav#stepper .node.active .t{color:var(--accent);}
+  nav#stepper .node.done .n{color:var(--ok);position:relative;}
+  nav#stepper .node.done .t{color:var(--ink-2);}
+  nav#stepper .node.done .n::after{content:"✓";font-size:12px;color:var(--ok);margin-left:3px;font-family:var(--mono);}
+
+  /* ── cards ─────────────────────────────────────────── */
+  .card{
+    background:var(--card);border:1px solid var(--rule);border-radius:var(--r-lg);
+    padding:16px 18px;margin-bottom:14px;position:relative;
+    box-shadow:0 1px 0 var(--rule-l) inset, 0 1px 2px rgba(60,40,20,.04);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .card:hover{border-color:var(--rule);box-shadow:0 1px 0 var(--rule-l) inset, 0 2px 10px rgba(60,40,20,.06);}
+  .card h3{
+    margin:0 0 11px;font-size:16px;font-family:var(--serif);font-weight:700;letter-spacing:-.01em;
+    padding-bottom:8px;border-bottom:1px solid var(--rule-l);
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .card h3::before{content:attr(data-mark);font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;}
+  .cat{display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--rule-l);}
   .cat:last-child{border-bottom:none}
-  .cat .name{font-weight:600;min-width:150px;}
-  .cat .meta{color:var(--mute);font-size:12px;}
-  .cat input[type=checkbox]{width:16px;height:16px;}
-  .cat.missing{opacity:.45}
-  .filelist{margin:6px 0 6px 24px;color:var(--mute);font-size:12px;}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;}
-  .pill.same{background:var(--same)} .pill.differ{background:var(--differ)}
-  .pill.onlyL{background:var(--onlyL)} .pill.onlyR{background:var(--onlyR)} .pill.off{background:var(--off)}
+  .cat .name{font-weight:600;min-width:170px;font-size:13.5px;}
+  .cat .meta{color:var(--mute);font-size:11.5px;font-family:var(--mono);letter-spacing:.02em;}
+  .cat input[type=checkbox]{
+    appearance:none;width:15px;height:15px;border:1.5px solid var(--rule);border-radius:2px;background:rgba(255,255,255,.5);
+    cursor:pointer;position:relative;flex:none;transition:border-color .12s,background .12s;
+  }
+  .cat input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent);}
+  .cat input[type=checkbox]:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fbf6ec;border-width:0 2px 2px 0;transform:rotate(45deg);}
+  .cat.missing{opacity:.4}
+
+  /* ── status chips (letterpress) ────────────────────── */
+  .pill{
+    --pc:var(--off);--pb:var(--card);
+    display:inline-flex;align-items:center;gap:5px;
+    padding:1px 8px 1px 7px;border:1px solid var(--pc);border-radius:999px;
+    font:600 10.5px/1.5 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+    color:var(--pc);background:var(--pb);
+  }
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pc);}
+  .pill.same{--pc:var(--same);--pb:var(--same-bg);}
+  .pill.differ{--pc:var(--differ);--pb:var(--differ-bg);}
+  .pill.onlyL{--pc:var(--onlyL);--pb:var(--onlyL-bg);}
+  .pill.onlyR{--pc:var(--onlyR);--pb:var(--onlyR-bg);}
+  .pill.off{--pc:var(--off);--pb:transparent;}
+
   table{width:100%;border-collapse:collapse;}
-  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #f0f0f0;vertical-align:top;font-size:13px;}
-  th{color:var(--mute);font-weight:600;font-size:12px;}
-  .diffline{font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;}
-  .diffline.add{background:#e6f9e6;} .diffline.del{background:#fde8e8;color:#7f1d1d;}
-  .diffline.eq{color:#999;} .diffline.ctx{color:#999;font-style:italic;}
-  details.diff{margin-top:6px;}
-  details.diff summary{cursor:pointer;color:var(--accent);font-size:12px;}
-  .setview{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-  .setview .col h4{margin:0 0 6px;font-size:12px;color:var(--mute);}
-  .setview li{list-style:none;padding:2px 0;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
-  .setview .tag{font-size:10px;color:#fff;border-radius:4px;padding:0 5px;margin-left:4px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule-l);vertical-align:top;font-size:13px;}
+  th{color:var(--mute);font-weight:600;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;}
+
+  /* ── diff ──────────────────────────────────────────── */
+  .diffline{font-family:var(--mono);font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;padding:0 8px;}
+  .diffline.add{background:#dde9ce;color:#3a5a26;}
+  .diffline.add::before{content:"+";color:var(--ok);margin-right:6px;}
+  .diffline.del{background:#efd9cf;color:#7a2a1c;}
+  .diffline.del::before{content:"–";color:var(--accent);margin-right:6px;}
+  .diffline.eq{color:var(--mute);}
+  .diffline.eq::before{content:" ";margin-right:6px;}
+  .diffline.ctx{color:var(--mute);font-style:italic;}
+  details.diff{margin-top:8px;}
+  details.diff summary{cursor:pointer;color:var(--accent);font:600 11.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;}
+
+  .setview{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .setview .col h4{margin:0 0 6px;font-size:11px;color:var(--mute);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;}
+  .setview ul{margin:0;padding:0;}
+  .setview li{list-style:none;padding:3px 0;font-family:var(--mono);font-size:12px;border-bottom:1px dotted var(--rule-l);}
+  .setview .tag{font:600 9px/1 var(--mono);color:#fbf6ec;border-radius:2px;padding:2px 5px;margin-left:5px;letter-spacing:.06em;text-transform:uppercase;}
   .set-L .tag{background:var(--onlyL)} .set-R .tag{background:var(--onlyR)}
-  textarea.merged{width:100%;min-height:140px;font:12px/1.5 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:6px;padding:8px;}
-  pre.installsh{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto;font-size:12px;max-height:420px;}
-  footer#status{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);
-                padding:8px 20px;font-size:12px;color:var(--mute);display:flex;gap:16px;}
-  footer#status .badge{padding:1px 8px;border-radius:999px;font-weight:600;}
-  footer#status .badge.safe{background:#e6f9e6;color:var(--ok);}
-  footer#status .badge.danger{background:#fef3c7;color:var(--warn);}
-  .toast{position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;
-         padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.2);}
-  .stepnav{display:flex;justify-content:space-between;margin-top:18px;}
+
+  textarea.merged{
+    width:100%;min-height:140px;font:12px/1.5 var(--mono);
+    border:1px solid var(--rule);border-radius:var(--r);padding:9px 10px;
+    background:rgba(255,255,255,.55);color:var(--ink);
+  }
+  textarea.merged:focus{outline:2px solid var(--accent-bg);border-color:var(--accent);}
+
+  .rec{font-size:11.5px;margin-top:4px;font-family:var(--mono);letter-spacing:.02em;}
+  .rec .muted{color:var(--mute);}
+  .rec-ok{color:var(--ok);}
+  .rec-warn{color:var(--gold);}
+
+  details.diff-section{margin-top:12px;}
+  details.diff-section > summary,details.unit > summary{cursor:pointer;list-style:revert;}
+  details.diff-section > summary{font:700 14.5px var(--serif);padding:6px 0;letter-spacing:-.005em;}
+  details.diff-section > summary::-webkit-details-marker{color:var(--accent);}
+  details.unit{padding:9px 0;border-bottom:1px solid var(--rule-l);}
+  details.unit:last-child{border-bottom:none;}
+  details.unit > summary{font-size:13px;}
+  details.unit[open] > summary{margin-bottom:7px;}
+
+  .empty-hint{background:var(--card);border:1px dashed var(--rule);border-radius:var(--r-lg);padding:18px;text-align:center;color:var(--mute);font-size:13px;}
+
+  /* ── code / install.sh block (warm dark) ──────────── */
+  pre.installsh{
+    background:#1c1814;color:#ece2cf;padding:16px 18px;border-radius:var(--r-lg);overflow:auto;
+    font:12px/1.6 var(--mono);max-height:440px;border:1px solid #3a322a;
+    box-shadow:0 2px 10px rgba(28,24,20,.18) inset;
+  }
+  pre.installsh::selection,pre.installsh ::selection{background:#8a2c25;color:#fbf6ec;}
+
+  /* ── footer / colophon ─────────────────────────────── */
+  footer#status{
+    position:sticky;bottom:0;background:rgba(251,246,236,.94);backdrop-filter:blur(6px);
+    border-top:1px solid var(--rule);padding:9px 26px;font:11.5px var(--mono);color:var(--mute);
+    display:flex;gap:18px;letter-spacing:.02em;
+  }
+  footer#status .badge{
+    --bc:var(--ok);--bb:var(--ok-bg);
+    padding:2px 9px;border-radius:999px;font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    border:1px solid var(--bc);color:var(--bc);background:var(--bb);
+  }
+  footer#status .badge.safe{--bc:var(--ok);--bb:var(--ok-bg);}
+  footer#status .badge.danger{--bc:var(--gold);--bb:#efdcbb;}
+
+  .toast{
+    position:fixed;bottom:54px;left:50%;transform:translateX(-50%);
+    background:#1c1814;color:#ece2cf;padding:11px 20px;border-radius:var(--r);
+    font:13px var(--serif);z-index:50;border:1px solid #3a322a;
+    box-shadow:0 10px 30px rgba(28,24,20,.28);
+  }
+
+  .stepnav{display:flex;justify-content:space-between;margin-top:22px;padding-top:16px;border-top:1px solid var(--rule);}
   .muted{color:var(--mute);} .small{font-size:12px;}
   .hidden-input{position:absolute;left:-9999px;}
-  a{color:var(--accent);}
-  code{background:#f3f4f6;border-radius:3px;padding:0 4px;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
-  kbd{background:#f3f4f6;border:1px solid #d1d5db;border-bottom-width:2px;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
-  .dropzone{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;background:#fafafa;transition:.15s;}
-  .dropzone.hover{border-color:var(--accent);background:var(--accent-bg);}
-  .dz-big{font-size:15px;font-weight:600;margin-bottom:4px;}
-  .dz-sub{color:var(--mute);font-size:12px;margin-bottom:10px;}
-  .dz-or{color:var(--mute);margin:8px 0;font-size:12px;}
-  .help{margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 14px;}
-  .help summary{cursor:pointer;font-weight:600;color:var(--warn);}
-  .help ol{margin:8px 0 0 18px;padding:0;} .help li{margin:5px 0;}
-  .okbox{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-top:12px;}
-  .export-card{border:2px solid var(--accent);background:var(--accent-bg);}
-  .export-card .big-btn{font-size:15px;padding:11px 26px;font-weight:700;}
-  .hint-card{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 14px;}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-bg);}
+  a:hover{border-bottom-color:var(--accent);}
+  code{
+    background:rgba(138,44,37,.07);border-radius:2px;padding:1px 5px;
+    font:12px/1.4 var(--mono);color:var(--ink);
+  }
+  pre code{background:none;padding:0;color:inherit;}
+  kbd{
+    background:var(--card);border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;
+    padding:1px 6px;font:11px/1.5 var(--mono);color:var(--ink-2);
+    box-shadow:0 1px 0 var(--rule-l) inset;
+  }
+
+  /* ── dropzone ──────────────────────────────────────── */
+  .dropzone{
+    position:relative;border:1px solid var(--rule);border-radius:var(--r-lg);
+    padding:26px 22px;text-align:center;background:rgba(255,255,255,.32);transition:.18s;
+  }
+  .dropzone::before,.dropzone::after,
+  .dropzone > .corner-tl,.dropzone > .corner-br{
+    content:"";position:absolute;width:12px;height:12px;border:1.5px solid var(--accent);
+  }
+  .dropzone::before{top:8px;left:8px;border-right:none;border-bottom:none;}
+  .dropzone::after{top:8px;right:8px;border-left:none;border-bottom:none;}
+  .dropzone > .corner-tl{bottom:8px;left:8px;border-right:none;border-top:none;}
+  .dropzone > .corner-br{bottom:8px;right:8px;border-left:none;border-top:none;}
+  .dropzone.hover{background:var(--accent-bg);border-color:var(--accent);}
+  .dz-big{font:700 15.5px var(--serif);margin-bottom:5px;letter-spacing:-.01em;}
+  .dz-sub{color:var(--mute);font-size:12.5px;margin-bottom:6px;font-family:var(--serif);}
+  .dz-sub.muted{color:var(--mute);}
+  .dz-or{
+    color:var(--mute);margin:10px 0;font:10.5px var(--mono);letter-spacing:.18em;text-transform:uppercase;
+    display:flex;align-items:center;gap:10px;
+  }
+  .dz-or::before,.dz-or::after{content:"";flex:1;height:1px;background:var(--rule-l);}
+
+  /* ── callout boxes ─────────────────────────────────── */
+  .help{
+    margin-top:14px;background:var(--gold-bg);border:1px solid #e2c98a;border-left-width:3px;
+    border-radius:var(--r);padding:10px 14px;
+  }
+  .help summary{cursor:pointer;font-weight:700;font-family:var(--serif);color:#6e4a14;font-size:13px;}
+  .help summary::before{content:"※ ";color:var(--gold);}
+  .help ol{margin:8px 0 0 20px;padding:0;} .help li{margin:5px 0;}
+  .okbox{
+    background:var(--ok-bg);border:1px solid #c2d2ab;border-left-width:3px;border-radius:var(--r);
+    padding:10px 13px;margin-top:12px;
+  }
+  .okbox summary{cursor:pointer;font-family:var(--serif);font-weight:700;color:#345427;font-size:13px;}
+  .okbox summary::before{content:"✓ ";color:var(--ok);font-family:var(--mono);}
+  .export-card{border:1.5px solid var(--accent);background:linear-gradient(var(--accent-bg),rgba(241,224,216,.5));}
+  .export-card .big-btn{font-size:15.5px;padding:12px 28px;font-weight:700;}
+  .hint-card{
+    background:var(--gold-bg);border:1px solid #e2c98a;border-left-width:3px;border-radius:var(--r-lg);
+    padding:11px 14px;font-family:var(--serif);
+  }
+
+  /* ── page-load reveal ──────────────────────────────── */
+  @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  header,.wrap > *{animation:rise .5s cubic-bezier(.2,.7,.2,1) both;}
+  header{animation-delay:.02s;}
+  .wrap > details#settings-panel{animation-delay:.10s;}
+  .wrap > nav#stepper{animation-delay:.18s;}
+  .wrap > main#step-body{animation-delay:.26s;}
+  .wrap > .stepnav{animation-delay:.34s;}
+  .card,.hint-card{animation:rise .4s cubic-bezier(.2,.7,.2,1) both;animation-delay:.3s;}
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;}}
+  .reveal-stagger > *{opacity:0;animation:rise .4s cubic-bezier(.2,.7,.2,1) forwards;}
+
+  /* responsive */
+  @media (max-width:680px){
+    .grid{grid-template-columns:1fr;}
+    nav#stepper{grid-template-columns:1fr 1fr;}
+    nav#stepper .node{border-bottom:1px solid var(--rule-l);}
+    header .sub{display:none;}
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🔁 sync-claude</h1>
-  <span class="sub">配置合并向导 · 单文件 · 零 Web Server</span>
+  <div class="wordmark">
+    <span class="mark" aria-hidden="true">⇄</span>
+    <h1>sync-claude</h1>
+  </div>
+  <span class="sub">Claude Code · 配置合并向导</span>
   <span class="spacer"></span>
-  <span class="small muted" id="zip-mode">zip: STORE(手写,无外部依赖)</span>
+  <span class="small muted" id="zip-mode">zip · STORE · 离线 · 单文件</span>
 </header>
 
 <div class="wrap">
 
   <details id="settings-panel">
-    <summary>⚙️ 全局设置(Git Server / 输出目录 / 敏感凭证 / 设置导入导出)</summary>
+    <summary>向导偏好 · Git 信息 / 输出目录 / 设备名 / 脱敏</summary>
+    <p class="small muted" style="margin:0 0 8px">这里只存<b>本向导工具自己的偏好</b>(填一次,下次打开还在),<b>和你的 Claude 配置无关</b> —— 不会改你 <code>~/.claude</code> 里的任何东西。真正要同步的 Claude 配置,是上面四步流程导出的那个 zip。</p>
     <div class="grid">
       <label>Git Server(留空则不写)<input type="text" id="set-gitserver" placeholder="github.com 或 gitea.example.com"></label>
       <label>仓库(repo)名<input type="text" id="set-reponame" placeholder="you/dotfiles"></label>
@@ -122,14 +383,15 @@
         <select id="set-protocol"><option value="ssh">ssh (git@)</option><option value="https">https</option></select>
       </label>
       <label>输出目录(生成的 install.sh 用)<input type="text" id="set-outputdir" placeholder="~/dotfiles"></label>
+      <label>本机设备名(写进导出文件名,区分多台机器)<input type="text" id="set-devicename" placeholder="MacBook / Mac mini / Linux-1"></label>
     </div>
 
     <div class="help" style="margin-top:10px">
       <p class="small" style="margin:0 0 6px">
-        🔒 <b>在线 git 服务(GitHub / GitLab / Gitee / Gitea 等):仓库务必设为 <code>Private</code></b> —— 配置里有你的个人指令和使用习惯,即使脱敏也不宜公开。
+        <b>※ 在线 git 服务(GitHub / GitLab / Gitee / Gitea 等):仓库务必设为 <code>Private</code></b> —— 配置里有你的个人指令和使用习惯,即使脱敏也不宜公开。
       </p>
       <p class="small" style="margin:0">
-        ⚠️ <b>推送到 public 仓库时,强烈建议不要包含 token / API key / Authorization 头等敏感信息</b> —— 一旦公开即视为永久泄露,在凭证失效前任何人都能盗用。默认脱敏就是为此:若非要 push public,务必保持下方「本次包含真实凭证」<b>不勾选</b>。
+        <b>† 推送到 public 仓库时,强烈建议不要包含 token / API key / Authorization 头等敏感信息</b> —— 一旦公开即视为永久泄露,在凭证失效前任何人都能盗用。默认脱敏就是为此:若非要 push public,务必保持下方「本次包含真实凭证」<b>不勾选</b>。
       </p>
     </div>
 
@@ -145,7 +407,7 @@
       <p class="small muted" style="margin:0 0 6px">ssh 推荐配好 SSH key 后用(免输密码);https 在首次 push 时输用户名 + Personal Access Token。</p>
 
       <details class="okbox" style="margin-top:8px">
-        <summary class="small"><b>📋 在 GitHub 建一个 Private 仓库(点开看步骤)</b></summary>
+        <summary class="small"><b>在 GitHub 建一个 Private 仓库(点开看步骤)</b></summary>
         <ol class="small" style="margin:8px 0 0; padding-left:22px; line-height:1.8">
           <li>登录 GitHub → 右上角 <kbd>+</kbd> → <b>New repository</b>。</li>
           <li>Repository name 填 <code>dotfiles</code>(名字随意,后面要对上)。</li>
@@ -165,11 +427,16 @@
           <span class="small muted">勾选=zip 保留真实 token / key(<b>个人设备间同步可省去各机重填</b>);默认脱敏,适合 push 到 git 或发给别人。随时可切,重新生成即生效。</span>
         </label>
       </div>
-      <div class="row" style="margin-top:8px;">
-        <button id="export-settings" class="ghost">导出设置</button>
-        <label class="btn ghost">导入设置<input type="file" id="import-settings" accept=".json" class="hidden-input"></label>
-      </div>
     </div>
+
+    <details class="help" style="margin-top:8px">
+      <summary>备份 / 还原本向导的偏好(换浏览器、换机器时用)</summary>
+      <p class="small muted" style="margin:8px 0 6px">这两个按钮存的是<b>上面这些填好的偏好</b>(Git 信息、输出目录、设备名等),方便你在另一台机器 / 另一个浏览器里免去重填。<b>不是</b>导入 Claude 配置 —— Claude 配置走上面四步导出的 zip。</p>
+      <div class="row">
+        <button id="export-settings" class="ghost">导出偏好为 JSON</button>
+        <label class="btn ghost">从 JSON 还原偏好<input type="file" id="import-settings" accept=".json" class="hidden-input"></label>
+      </div>
+    </details>
   </details>
 
   <nav id="stepper"></nav>
@@ -183,13 +450,13 @@
 
 </div>
 
-<footer id="status"><span id="status-text">就绪</span><span class="spacer"></span><span id="redact-badge" class="badge safe">🛡️ 脱敏中</span></footer>
+<footer id="status"><span id="status-text">就绪</span><span class="spacer"></span><span id="redact-badge" class="badge safe">脱敏中</span></footer>
 
 <!-- ===== 模板:text/plain 块,避免 shell/JS 转义冲突 ===== -->
 
 <script type="text/plain" id="tpl-install-sh">
 #!/usr/bin/env bash
-# Generated by sync.html on {{DATE}}. Mac-first (Phase 1).
+# Generated by sync-claude.html on {{DATE}}. Mac-first (Phase 1).
 # Source: {{GIT_URL}}
 set -euo pipefail
 
@@ -199,7 +466,7 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 [ -d "$SRC" ] || { echo "✗ 找不到 $SRC"; exit 1; }
 mkdir -p "$CLAUDE_HOME"
 
-# --- 把选定的基线条目,以符号链接挂到 ~/.claude/ ---
+# --- 把选定的配置条目,以符号链接挂到 ~/.claude/ ---
 ITEMS=( {{ITEMS}} )
 for item in "${ITEMS[@]}"; do
   target="$SRC/$item"; link="$CLAUDE_HOME/$item"
@@ -244,9 +511,9 @@ echo "完成。验证: ls -la $CLAUDE_HOME"
 </script>
 
 <script type="text/plain" id="tpl-readme">
-# claude dotfiles 基线
+# Claude Code 配置(跨设备同步用)
 
-由 sync.html 于 {{DATE}} 生成。来源:{{GIT_URL}}
+由 sync-claude.html 于 {{DATE}} 生成。来源:{{GIT_URL}}
 
 ## 安装(每台机器一次性)
 
@@ -297,7 +564,7 @@ Thumbs.db
 <script>
 "use strict";
 /* =========================================================================
-   sync.html 主脚本。模块划分(用 banner 注释分隔):
+   sync-claude.html 主脚本。模块划分(用 banner 注释分隔):
      1. STATE          2. SETTINGS STORE     3. FILE READERS
      4. SNAPSHOT BUILDER  5. REDACTOR       6. DIFF ENGINE
      7. ZIP (STORE)    8. INSTALL-SCRIPT GEN 9. UI RENDER  10. WIRING
@@ -323,7 +590,7 @@ const CATEGORY_LABEL = {
 };
 const state = {
   step: 1,
-  settings: { gitServer:'', repoName:'', protocol:'ssh', outputDir:'~/dotfiles', includeSecrets:false },
+  settings: { gitServer:'', repoName:'', protocol:'ssh', outputDir:'~/dotfiles', includeSecrets:false, deviceName:'' },
   local:  { source:'本机', files:{}, categories:{}, pickedFolderName:'' },
   remote: { source:'导入', files:{}, archiveName:'' },
   diff: null,        // [{path, category, status, inL, inR}]
@@ -345,7 +612,7 @@ function saveSettings(){
 }
 function bindSettings(){
   const map = { 'set-gitserver':'gitServer','set-reponame':'repoName',
-                'set-protocol':'protocol','set-outputdir':'outputDir','set-secrets':'includeSecrets' };
+                'set-protocol':'protocol','set-outputdir':'outputDir','set-secrets':'includeSecrets','set-devicename':'deviceName' };
   for (const [id,key] of Object.entries(map)){
     const el = document.getElementById(id);
     if (key === 'includeSecrets'){
@@ -359,7 +626,10 @@ function bindSettings(){
       });
     } else {
       el.value = state.settings[key] || '';
-      el.addEventListener('change', ()=>{ state.settings[key] = el.value.trim(); saveSettings(); });
+      el.addEventListener('change', ()=>{
+        state.settings[key] = el.value.trim(); saveSettings();
+        const np = document.getElementById('local-name-preview'); if (np) np.textContent = baselineName();
+      });
     }
   }
   document.getElementById('export-settings').addEventListener('click', exportSettings);
@@ -396,8 +666,19 @@ function categorize(path){
   if (path.startsWith('output-styles/')) return 'output-styles/';
   if (path.startsWith('hooks/')) return 'hooks/';
   if (path.startsWith('skills/')) return 'skills/';
-  if (path.startsWith('plugins/')) return 'plugins/';
+  // plugins/:只同步两个清单文件;marketplaces/ cache/ data/ 是安装产物,不同步(对齐 pack.sh)
+  if (path === 'plugins/installed_plugins.json' || path === 'plugins/known_marketplaces.json') return 'plugins/';
+  if (path.startsWith('plugins/')) return null;
   return null;
+}
+// 噪声 / 系统文件:打包和导入都跳过(macOS .DS_Store、Windows Thumbs.db、__MACOSX、编辑器临时文件)
+const NOISE_RE = /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)(\s|$)|(^|\/)__MACOSX\/|(^|\/)\.git\/|~$/i;
+function isNoise(path){ return NOISE_RE.test(path); }
+// 这些文件需要在读入时解析出 .json 字段(fileText/listKeys 依赖它,否则导入侧 MCP/插件/settings 看不见)
+function shouldParseJson(logical){
+  return logical === 'settings.json'
+      || logical === 'mcp-servers.json'
+      || (logical.startsWith('plugins/') && logical.endsWith('.json'));
 }
 // 把 <input webkitdirectory>.files 转成 [{file, relPath}]
 function entriesFromFileList(fileList){
@@ -405,11 +686,11 @@ function entriesFromFileList(fileList){
 }
 // 拖入时递归读取目录项;剪枝超大/无关子目录,加速「拖整个 Home」
 const DROP_PRUNE = new Set(['Library','node_modules','.Trash','.cache','.git','Pictures','Movies','Music','Public','Applications','Desktop','Documents','Downloads']);
-function _readBatch(reader){ return new Promise(res=>reader.readEntries(es=>res(es), er=>{ console.warn('[sync.html] readEntries 失败(可能是 file:// 限制)', er); res([]); })); }
+function _readBatch(reader){ return new Promise(res=>reader.readEntries(es=>res(es), er=>{ console.warn('[sync-claude.html] readEntries 失败(可能是 file:// 限制)', er); res([]); })); }
 async function collectEntry(entry, prefix, out){
   const path = prefix ? prefix + '/' + entry.name : entry.name;
   if (entry.isFile){
-    await new Promise(res => entry.file(f => { out.push({file:f, relPath:path}); res(); }, er=>{ console.warn('[sync.html] entry.file 失败', path, er); res(); }));
+    await new Promise(res => entry.file(f => { out.push({file:f, relPath:path}); res(); }, er=>{ console.warn('[sync-claude.html] entry.file 失败', path, er); res(); }));
   } else if (entry.isDirectory){
     if (prefix && DROP_PRUNE.has(entry.name)) return; // 嵌套的重目录跳过(顶层保留,以支持拖 Home)
     const reader = entry.createReader();
@@ -455,14 +736,14 @@ function ingest(entries){
 async function buildClaudeFiles(claudeRaw){
   const files = {};
   for (const [logical, f] of Object.entries(claudeRaw)){
+    if (isNoise(logical)) continue;   // .DS_Store / Thumbs.db / __MACOSX 等
     const cat = categorize(logical);
     if (!cat) continue;               // 忽略 projects/、sessions/、缓存等噪声
     if (f.size > 5*1024*1024) continue;
     const ab = await f.arrayBuffer();
     const bytes = new Uint8Array(ab);
     const obj = { bytes, text: TD.decode(bytes), size: f.size, category: cat };
-    // settings.json 顺手解析出 json,供 fileText 脱敏(镜像 mcp 的做法)—— 否则导出会漏脱敏
-    if (cat === 'settings.json'){ try { obj.json = JSON.parse(obj.text); } catch(e){ /* 坏 JSON:fileText 会原样返回 */ } }
+    if (shouldParseJson(logical)){ try { obj.json = JSON.parse(obj.text); } catch(e){ /* 坏 JSON:fileText 会原样返回 */ } }
     files[logical] = obj;
   }
   return files;
@@ -505,7 +786,7 @@ async function readArchive(file){
   if (lower.endsWith('.zip')){
     entries = parseZip(bytes); // {path: Uint8Array}
   } else if (lower.endsWith('.tgz') || lower.endsWith('.tar.gz')){
-    throw new Error('.tgz 暂不支持。请在源机器用 sync.html 重新导出 .zip,再导入这里。');
+    throw new Error('.tgz 暂不支持。请在源机器用 sync-claude.html 重新导出 .zip,再导入这里。');
   } else {
     throw new Error('不认识的文件类型:'+file.name);
   }
@@ -514,9 +795,12 @@ async function readArchive(file){
     let logical = path;
     if (logical.startsWith('claude/')) logical = logical.slice('claude/'.length);
     if (['install.sh','README.md','.gitignore'].includes(logical)) continue;
+    if (isNoise(logical)) continue;
     const cat = categorize(logical);
     if (!cat) continue;
-    files[logical] = { bytes: data, text: TD.decode(data), size: data.length, category: cat };
+    const obj = { bytes: data, text: TD.decode(data), size: data.length, category: cat };
+    if (shouldParseJson(logical)){ try { obj.json = JSON.parse(obj.text); } catch(e){} }
+    files[logical] = obj;
   }
   return { files };
 }
@@ -724,7 +1008,7 @@ function parseZip(bytes){ // STORE only → {path: Uint8Array}
     const localOff = dv.getUint32(p+42,true);
     const name = dec.decode(bytes.subarray(p+46, p+46+nameLen));
     p += 46 + nameLen + extraLen + commentLen;
-    if (method !== 0) throw new Error(`zip 内「${name}」使用了压缩(method=${method}),仅支持 STORE。请导入 sync.html 自己导出的 zip。`);
+    if (method !== 0) throw new Error(`zip 内「${name}」使用了压缩(method=${method}),仅支持 STORE。请导入 sync-claude.html 自己导出的 zip。`);
     const lhNameLen = dv.getUint16(localOff+26,true);
     const lhExtraLen= dv.getUint16(localOff+28,true);
     const dataStart = localOff + 30 + lhNameLen + lhExtraLen;
@@ -795,12 +1079,13 @@ function buildBaselineFiles(){
 
 // ===== 9. UI RENDER =====
 function renderStepper(){
-  const titles = ['备份本机','导入备份','比对','决定 & 生成'];
+  const titles = ['备份本机','导入备份','比对','决定 & 导出'];
   const el = document.getElementById('stepper');
+  const pad = n => String(n).padStart(2,'0');
   el.innerHTML = titles.map((t,i)=>{
     const n = i+1;
     const cls = n === state.step ? 'active' : (n < state.step ? 'done' : '');
-    return `<div class="node ${cls}" data-go="${n}"><span class="n">${n}</span>${t}</div>`;
+    return `<div class="node ${cls}" data-go="${n}"><span class="n">${pad(n)}</span><span class="t">${t}</span></div>`;
   }).join('');
   el.querySelectorAll('.node').forEach(node=>{
     node.addEventListener('click', ()=>{
@@ -816,8 +1101,8 @@ function renderStatus(){
   document.getElementById('status-text').textContent =
     `本机活跃 ${lc} 文件 · 导入 ${rc} 文件 · 已选 ${sel} 项 · 第 ${state.step}/4 步`;
   const b = document.getElementById('redact-badge');
-  if (state.settings.includeSecrets){ b.textContent='⚠️ 含真实凭证'; b.className='badge danger'; }
-  else { b.textContent='🛡️ 脱敏中'; b.className='badge safe'; }
+  if (state.settings.includeSecrets){ b.textContent='含真实凭证'; b.className='badge danger'; }
+  else { b.textContent='脱敏中'; b.className='badge safe'; }
 }
 function renderStep(){
   const body = document.getElementById('step-body');
@@ -831,7 +1116,7 @@ function renderStep(){
 function updateNav(){
   document.getElementById('btn-prev').disabled = state.step === 1;
   const next = document.getElementById('btn-next');
-  if (state.step === 4){ next.textContent = '生成基线包 ⬇'; }
+  if (state.step === 4){ next.textContent = '↓ 导出配置包'; }
   else { next.textContent = '下一步 →'; }
   // 启用条件
   let can = true;
@@ -851,24 +1136,25 @@ function renderStep1(body){
   const canExport = Object.keys(state.local.files).length>0 && Object.values(state.local.categories).some(Boolean);
   body.innerHTML = `
     <div class="card">
-      <h3>① 把 Claude 配置弄进来 —— 拖拽 / 选目录都行</h3>
+      <h3 data-mark="01 · 备份">把 Claude 配置弄进来 —— 拖拽 / 选目录都行</h3>
       <div id="dropzone" class="dropzone">
-        <div class="dz-big">📁 把 <code>~/.claude</code> 文件夹拖到这里</div>
+        <span class="corner-tl"></span><span class="corner-br"></span>
+        <div class="dz-big">把 <code>~/.claude</code> 文件夹拖到这里</div>
         <div class="dz-sub">想顺带同步 MCP?把 <code>~/.claude.json</code> 一起选中、一起拖进来即可</div>
-        <div class="dz-sub muted">拖了没反应?Chrome 在 <code>file://</code> 下偶尔不收文件夹 —— 直接点下方「📂 选择目录」一定行。</div>
-        <div class="dz-or">—— 或 ——</div>
+        <div class="dz-sub muted">拖了没反应?Chrome 在 <code>file://</code> 下偶尔不收文件夹 —— 直接点下方「选择目录」一定行。</div>
+        <div class="dz-or">或</div>
         <div class="row" style="justify-content:center">
-          <label class="btn primary">📂 选择目录
+          <label class="btn primary">选择目录
             <input type="file" id="pick-claude-dir" webkitdirectory class="hidden-input">
           </label>
-          <label class="btn ghost">📄 单独选 ~/.claude.json
+          <label class="btn ghost">单独选 ~/.claude.json
             <input type="file" id="pick-claude-json" accept=".json" class="hidden-input">
           </label>
         </div>
       </div>
 
       <details class="help" open>
-        <summary>📍 第一次用 / 找不到?点开看最省事的三步(隐藏文件不用愁)</summary>
+        <summary>第一次用 / 找不到?点开看最省事的三步(隐藏文件不用愁)</summary>
         <ol>
           <li>打开 <b>Finder</b>,按 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd>,粘贴 <code>~/.claude</code> 回车 —— 直接到该目录,不用一层层翻。</li>
           <li>把整个 <b>.claude</b> 文件夹<i>拖</i>到上面虚线框里。要 MCP 的话,再 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> 粘贴 <code>~/.claude.json</code>,把它和文件夹一起选中、一起拖进来。</li>
@@ -877,7 +1163,7 @@ function renderStep1(body){
         <p class="small muted" style="margin-top:8px">
           <b>关于 <code>~</code>:</b>就是你的用户目录(Finder 边栏的小房子图标)。所有弹窗都接受 <code>~</code>,<b>不用</b>展开成 <code>/Users/你的名字</code>。<br>
           <b>看不到 <code>.claude</code>?</b>它是以 <code>.</code> 开头的隐藏文件夹 —— Mac 按 <kbd>⌘</kbd><kbd>⇧</kbd><kbd>.</kbd> 切换显示;Windows 在资源管理器「查看 → 隐藏的项目」。<br>
-          <b>偷懒:</b>点「选择目录」后,直接选边栏小房子(Home),本工具会自动从中挑出 <code>.claude/</code> 和 <code>.claude.json</code>。⚠ Home 大,浏览器要扫一遍整个用户目录,可能要等十几秒。
+          <b>偷懒:</b>点「选择目录」后,直接选边栏小房子(Home),本工具会自动从中挑出 <code>.claude/</code> 和 <code>.claude.json</code>。※ Home 大,浏览器要扫一遍整个用户目录,可能要等十几秒。
         </p>
       </details>
 
@@ -885,13 +1171,13 @@ function renderStep1(body){
 
       ${hasDir?`
       <div class="okbox">
-        <b>✅ 已读取:</b> ${fileCount} 个配置文件 · 自定义 skill ${stats['skills/']?.count||0} 个
+        <b>已读取:</b> ${fileCount} 个配置文件 · 自定义 skill ${stats['skills/']?.count||0} 个
         ${mcpCount!=null?` · MCP servers ${mcpCount} 个`:' · <span class="small">MCP 未读取(可选,要的话点「单独选 ~/.claude.json」)</span>'}
       </div>`:''}
     </div>
 
     <div class="card">
-      <h3>② 勾选要纳入同步的类别</h3>
+      <h3 data-mark="02 · 勾选">勾选要纳入同步的类别</h3>
       ${CATEGORY_ORDER.map(c=>{
         const s = stats[c]; const checked = state.local.categories[c] ? 'checked' : '';
         const cls = s.present ? '' : 'missing';
@@ -907,23 +1193,31 @@ function renderStep1(body){
 
     ${canExport ? `
     <div class="card export-card">
-      <h3>⬇ 打包本机配置,传给另一台机器</h3>
-      <p class="small">把上面勾选的内容压成 <code>claude-baseline-YYYY-MM-DD.zip</code> —— <b>默认已脱敏</b>(token / API key / Authorization 头不会进 zip),zip 里自带 <code>install.sh</code> + <code>README.md</code>。</p>
+      <h3 data-mark="↓ 导出">打包本机配置,传给另一台机器</h3>
+      <p class="small">把上面勾选的内容压成一个 <code>.zip</code>(文件名带设备名 + 时间,方便区分多台机器)—— <b>默认已脱敏</b>(token / API key / Authorization 头不会进 zip),zip 里自带 <code>install.sh</code> + <code>README.md</code>。</p>
       <p class="small" style="margin-top:6px"><b>另一台机器怎么用:</b>把 zip 拷过去 → 解压到 <code>~/dotfiles</code> → 终端跑 <code>bash install.sh</code>。</p>
+      <p class="small muted" style="margin-top:6px">导出文件名:<code id="local-name-preview"></code> <span class="small muted">(设备名在「向导偏好」里改,改成 MacBook / Mac mini 等便于区分)</span></p>
       <div class="row" style="margin-top:12px">
-        <button id="gen-local" class="primary big-btn">⬇ 立即生成本机 zip</button>
+        <button id="gen-local" class="primary big-btn">立即导出本机配置包</button>
       </div>
       <div id="local-install-out" style="display:none;margin-top:14px">
-        <p class="small muted">zip 里的 install.sh 长这样(另一台机器解压后直接 <code>bash install.sh</code> 即可,不用手写):</p>
-        <pre class="installsh" id="local-install-pre"></pre>
+        <div class="okbox"><b>已导出。</b>把这一个 zip 搞到另一台机器 → 解压到 <code>~/dotfiles</code> → 终端跑 <code>bash install.sh</code>,完事。</div>
+        <details class="okbox" style="margin-top:8px">
+          <summary class="small"><b>想要长期双向同步?把 zip 内容放进 git(可选,推荐)</b></summary>
+          <p class="small" style="margin:6px 0 0">在另一台机器解压后,把 <code>~/dotfiles</code> 变成 git 仓库,所有机器共享一份:建 Private 空仓库 → <code>cd ~/dotfiles && git init && git add -A && git commit -m "init"</code> → <code>git remote add origin git@github.com:你/dotfiles.git && git push -u origin main</code>。以后改配置重新导出覆盖 → <code>commit && push</code>;其它机器 <code>git pull</code> 即生效。※ public 仓库务必保持默认脱敏。</p>
+        </details>
+        <details class="help" style="margin-top:8px">
+          <summary>zip 里的 install.sh 长什么样?(已自动放进 zip,通常不用手改)</summary>
+          <pre class="installsh" id="local-install-pre"></pre>
+        </details>
       </div>
       <details class="help" style="margin-top:12px">
         <summary>我想"比对两台机器的配置再合并",而不是整包发过去?</summary>
-        <p class="small muted">那请用页面底部的「下一步 →」走完整四步:第 2 步导入另一台的 zip → 第 3 步图形化比对差异 → 第 4 步勾选取舍 → 生成<b>合并后</b>的基线。本卡片是"把这台整包发过去"的快捷出口,适合第一次把配置搬过去。</p>
+        <p class="small muted">那请用页面底部的「下一步 →」走完整四步:第 2 步导入另一台的 zip → 第 3 步图形化比对差异 → 第 4 步勾选取舍 → 导出<b>合并后</b>的配置包。本卡片是"把这台整包发过去"的快捷出口,适合第一次把配置搬过去。</p>
       </details>
     </div>` : `
     <div class="hint-card">
-      👆 选好 <code>~/.claude</code>(并勾选至少一个类别)后,这里会出现「⬇ 立即生成本机 zip」按钮 —— 那就是把本机配置打包传给另一台的入口。
+      选好 <code>~/.claude</code>(并勾选至少一个类别)后,这里会出现「立即导出本机配置包」按钮 —— 那就是把本机配置打包传给另一台的入口。
     </div>`}
   `;
   // 拖拽
@@ -935,15 +1229,15 @@ function renderStep1(body){
     const errEl = document.getElementById('pick-err');
     try {
       const { entries, diag } = await entriesFromDrop(e.dataTransfer);
-      console.log('[sync.html 拖入诊断]', diag, '→ 收集到', entries.length, '个文件;前几个:', entries.slice(0,6).map(x=>x.relPath));
+      console.log('[sync-claude.html 拖入诊断]', diag, '→ 收集到', entries.length, '个文件;前几个:', entries.slice(0,6).map(x=>x.relPath));
       if (!entries.length){
         // file:// 下 Chrome 偶发不交出拖入文件夹的内容(entries API 哑火)—— 已知限制,不是用户拖错
-        errEl.innerHTML = '拖入没收到任何文件。Chrome 在 <code>file://</code> 下偶尔不把拖入文件夹的内容交给网页(已知限制)。<b>请改用上方「📂 选择目录」按钮</b> —— 它走另一条更可靠的通道,一定能读出来。诊断信息已打印到控制台(按 <kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd> 打开 → Console 可见)。';
+        errEl.innerHTML = '拖入没收到任何文件。Chrome 在 <code>file://</code> 下偶尔不把拖入文件夹的内容交给网页(已知限制)。<b>请改用上方「选择目录」按钮</b> —— 它走另一条更可靠的通道,一定能读出来。诊断信息已打印到控制台(按 <kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd> 打开 → Console 可见)。';
         return;
       }
       await processEntries(entries, '拖入');
     }
-    catch(err){ errEl.textContent='拖入失败: '+err.message; console.error('[sync.html] drop error', err); }
+    catch(err){ errEl.textContent='拖入失败: '+err.message; console.error('[sync-claude.html] drop error', err); }
   });
   // 选择目录(支持选 .claude 本身,或整个 Home,ingest 都认)
   document.getElementById('pick-claude-dir').addEventListener('change', async (e)=>{
@@ -970,6 +1264,8 @@ function renderStep1(body){
   // Step 1 快捷出口:立即打包本机 zip
   const genLocal = document.getElementById('gen-local');
   if (genLocal) genLocal.addEventListener('click', exportLocalZip);
+  const namePreview = document.getElementById('local-name-preview');
+  if (namePreview) namePreview.textContent = baselineName();
 }
 
 function renderStep2(body){
@@ -977,18 +1273,18 @@ function renderStep2(body){
   const rc = Object.keys(state.remote.files).length;
   body.innerHTML = `
     <div class="card">
-      <h3>导入另一台机器的备份(本工具导出的 .zip)</h3>
+      <h3 data-mark="01 · 导入">导入另一台机器的备份(本工具导出的 .zip)</h3>
       <div class="row">
         <label class="btn primary">${has?'重新导入':'选择 .zip 文件'}
           <input type="file" id="pick-archive" accept=".zip,.tgz,.tar.gz" class="hidden-input">
         </label>
-        ${has?`<span class="small muted">已导入:${state.remote.archiveName} → ${rc} 文件</span>`:'<span class="small muted">另一台机器用 sync.html 导出后, AirDrop/U盘 传过来</span>'}
+        ${has?`<span class="small muted">已导入:${state.remote.archiveName} → ${rc} 文件</span>`:'<span class="small muted">另一台机器用 sync-claude.html 导出后, AirDrop/U盘 传过来</span>'}
       </div>
       <div id="archive-err" class="small" style="color:var(--err);margin-top:6px"></div>
     </div>
     <div class="card">
       <h3>或:跳过导入</h3>
-      <p class="small muted">如果你只想把本机配置直接打包成基线(单机导出,不做比对),可以跳过。下一步直接进入「决定 & 生成」。</p>
+      <p class="small muted">如果你只想把本机配置直接打包(单机导出,不做比对),可以跳过。下一步直接进入「决定 & 导出」。</p>
       <button id="skip-import" class="ghost">跳过导入,直接打包本机</button>
     </div>
   `;
@@ -1011,8 +1307,8 @@ function renderStep2(body){
 }
 
 function statusPill(s){
-  const map = { same:['both-same','🟢 相同','same'], differ:['both-differ','🟡 不同','differ'],
-                'only-local':['only-local','🔵 仅本机','onlyL'], 'only-remote':['only-remote','🟣 仅导入','onlyR'] };
+  const map = { same:['both-same','相同','same'], differ:['both-differ','不同','differ'],
+                'only-local':['only-local','仅本机','onlyL'], 'only-remote':['only-remote','仅导入','onlyR'] };
   const [_,label,cls] = map[s]; return `<span class="pill ${cls}">${label}</span>`;
 }
 function isListPath(path){
@@ -1024,58 +1320,100 @@ function listKeys(path, f){
   if (path === 'plugins/installed_plugins.json'){ try { return Object.keys(JSON.parse(f.text).plugins||{}); } catch(e){ return []; } }
   return [];
 }
+// 把 diff 条目聚合成"单元":skills/<name>/** → 一个 skill 单元;mcp / 插件清单各自一个单元;其余每条 path 自成一单元
+function diffUnits(diff){
+  const map = new Map();
+  for (const it of diff){
+    let key, label;
+    if (it.category === 'skills/'){
+      const name = it.path.split('/')[1];
+      key = 'skill::'+name; label = 'skill · '+name;
+    } else if (it.category === 'mcpServers'){
+      key = 'unit::mcp'; label = 'MCP servers';
+    } else {
+      // plugins/ 的两个清单各自独立成单元(installed→集合视图;known_marketplaces→文本 diff),不强行合并
+      key = 'path::'+it.path; label = it.path;
+    }
+    if (!map.has(key)) map.set(key, { key, label, category: it.category, items: [], paths: [] });
+    const u = map.get(key); u.items.push(it); u.paths.push(it.path);
+  }
+  const units = [...map.values()];
+  for (const u of units){
+    const ss = new Set(u.items.map(i=>i.status));
+    u.status = ss.size === 1 ? u.items[0].status : 'differ'; // 混合 → 关注(当作需取舍)
+    u.fileCount = u.items.length;
+  }
+  return units;
+}
+// 单元详情(展开时显示):skill → 文件清单;mcp/plugins → 双列集合;differ 文本 → 行级 diff
+function unitDetailHTML(u){
+  const L = activeFiles(state.local), R = state.remote.files;
+  if (u.category === 'skills/'){
+    return '<div class="small" style="line-height:2">'+u.items.map(it=>
+      `${statusPill(it.status)} <code>${it.path}</code>`
+    ).join('<br>')+'</div>';
+  }
+  const rep = u.items[0];
+  if (isListPath(rep.path)){
+    const aK = listKeys(rep.path, L[rep.path]), bK = listKeys(rep.path, R[rep.path]);
+    const d = setDiff(aK, bK);
+    return `<div class="setview">
+      <div class="col set-L"><h4>本机 (${aK.length})</h4><ul>${aK.map(k=>`<li>${k}${d.onlyA.includes(k)?'<span class="tag">仅本机</span>':''}</li>`).join('')}</ul></div>
+      <div class="col set-R"><h4>导入 (${bK.length})</h4><ul>${bK.map(k=>`<li>${k}${d.onlyB.includes(k)?'<span class="tag">仅导入</span>':''}</li>`).join('')}</ul></div>
+    </div>`;
+  }
+  const { ops, truncated } = lineDiff(fileText(rep.path, L[rep.path]||{text:''}), fileText(rep.path, R[rep.path]||{text:''}));
+  const html = ops.map(o=>{
+    const esc = (o.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<div class="diffline ${o.type}">${o.type==='add'?'+ ':o.type==='del'?'- ':'  '}${esc}</div>`;
+  }).join('');
+  return (truncated?'<div class="diffline ctx">⟨已截断⟩</div>':'')+html;
+}
+function statusGroupSection(chipKey, title, desc, units){
+  if (!units.length) return ''; // 空组不显示,减少噪声
+  const chip = `<span class="pill ${chipKey}">${title}</span>`;
+  return `<details class="card diff-section">
+    <summary>${chip} <b>${units.length}</b> 项 <span class="small muted">— ${desc}</span></summary>
+    <div style="margin-top:10px">
+    ${units.map(u=>{
+      const cnt = u.category==='skills/' ? ` <span class="small muted">(${u.fileCount} 文件)</span>` : '';
+      return `<details class="unit">
+        <summary>${statusPill(u.status)} <code>${u.label}</code>${cnt}</summary>
+        <div>${unitDetailHTML(u)}</div>
+      </details>`;
+    }).join('')}
+    </div>
+  </details>`;
+}
 function renderStep3(body){
   if (!state.diff) state.diff = computeDiff();
-  const diff = state.diff;
-  // 按类别分组
-  const groups = {};
-  for (const it of diff){ (groups[it.category] = groups[it.category] || []).push(it); }
-  const order = CATEGORY_ORDER.filter(c=>groups[c]);
+  const units = diffUnits(state.diff);
+  const byStatus = { same:[], differ:[], 'only-local':[], 'only-remote':[] };
+  for (const u of units) byStatus[u.status].push(u);
+  const total = units.length;
   body.innerHTML = `
     <div class="card">
-      <h3>比对结果(本机 ↔ 导入)</h3>
-      <p class="small muted">绿色=相同 · 黄色=两边都有但内容不同 · 蓝=仅本机 · 紫=仅导入。点条目展开看差异。下一步决定取舍。</p>
+      <h3 data-mark="01 · 比对">比对结果 · 本机 ↔ 导入</h3>
+      <p class="small muted">共 ${total} 个单元 · 相同 ${byStatus.same.length} · 不同 ${byStatus.differ.length} · 仅本机 ${byStatus['only-local'].length} · 仅导入 ${byStatus['only-remote'].length}。各组默认折叠,点开看详情;skill/插件按整体展示,不堆内部文件。下一步会给每项建议,无需手工取舍。</p>
     </div>
-    ${order.map(c=>`
-      <div class="card">
-        <h3>${CATEGORY_LABEL[c]}</h3>
-        <table><tbody>
-        ${groups[c].map(it=>{
-          const expandable = (it.status==='differ') || isListPath(it.path);
-          return `<tr>
-            <td style="width:120px">${statusPill(it.status)}</td>
-            <td>
-              <div><code>${it.path}</code></div>
-              ${expandable?`<details class="diff"><summary>查看差异</summary><div class="diffbody" data-path="${it.path}"></div></details>`:''}
-            </td>
-          </tr>`;
-        }).join('')}
-        </tbody></table>
-      </div>`).join('')}
+    ${statusGroupSection('same','相同','两边内容一致,可直接纳入', byStatus.same)}
+    ${statusGroupSection('differ','不同','两边都有但内容不同,下一步会给默认取舍建议', byStatus.differ)}
+    ${statusGroupSection('onlyL','仅本机','只有本机有,建议补进配置包', byStatus['only-local'])}
+    ${statusGroupSection('onlyR','仅导入','只有导入那台有,建议补进配置包', byStatus['only-remote'])}
+    ${total===0?`<div class="empty-hint">没有可比对的内容 —— 检查本机和导入是否都选了 ~/.claude,或直接去下一步导出配置包。</div>`:''}
   `;
-  // 填充 diff 体
-  body.querySelectorAll('.diffbody').forEach(db=>{
-    const path = db.dataset.path;
-    const L = activeFiles(state.local), R = state.remote.files;
-    if (isListPath(path)){
-      const aK = listKeys(path, L[path]), bK = listKeys(path, R[path]);
-      const d = setDiff(aK, bK);
-      db.innerHTML = `<div class="setview">
-        <div class="col set-L"><h4>本机 (${aK.length})</h4><ul>${aK.map(k=>`<li>${k}${d.onlyA.includes(k)?'<span class="tag">仅本机</span>':''}</li>`).join('')}</ul></div>
-        <div class="col set-R"><h4>导入 (${bK.length})</h4><ul>${bK.map(k=>`<li>${k}${d.onlyB.includes(k)?'<span class="tag">仅导入</span>':''}</li>`).join('')}</ul></div>
-      </div>`;
-    } else {
-      const { ops, truncated } = lineDiff(fileText(path,L[path]||{text:''}), fileText(path,R[path]||{text:''}));
-      const html = ops.map(o=>{
-        const esc = (o.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-        return `<div class="diffline ${o.type}">${o.type==='add'?'+ ':o.type==='del'?'- ':'  '}${esc}</div>`;
-      }).join('');
-      db.innerHTML = (truncated?'<div class="diffline ctx">⟨已截断⟩</div>':'')+html;
-    }
-  });
 }
 
+// 每种状态的建议(展示给用户;默认 pick 由 initDecisions 设置,已与建议一致)
+function recommend(status){
+  if (status === 'same')        return { label:'建议 · 纳入',         cls:'rec-ok',   why:'两边一致,任意一边' };
+  if (status === 'only-local')  return { label:'建议 · 纳入本机版',   cls:'rec-ok',   why:'本机独有,补进配置包' };
+  if (status === 'only-remote') return { label:'建议 · 纳入导入版',   cls:'rec-ok',   why:'导入独有,补进配置包' };
+  if (status === 'differ')      return { label:'建议 · 默认取本机',    cls:'rec-warn', why:'两边不同;可改导入或手动合并' };
+  return { label:'', cls:'', why:'' };
+}
 function initDecisions(){
+  // 默认即"建议":取并集 —— 相同 / 两边独有 全部纳入;differ 默认取本机。用户可直接生成。
   state.decisions = {};
   for (const it of (state.diff||[])){
     let pick = 'local';
@@ -1091,10 +1429,12 @@ function renderStep4(body){
   const order = CATEGORY_ORDER.filter(c=>groups[c]);
   body.innerHTML = `
     <div class="card">
-      <h3>决定哪些纳入同步基线</h3>
-      <p class="small muted">勾选=纳入。两边都有的不同项,选「本机 / 导入 / 手动合并」。最后点「生成基线包」下载 zip + install.sh。</p>
+      <h3 data-mark="01 · 决定">决定哪些纳入同步配置</h3>
+      <div class="okbox">已按 <b>取并集</b> 策略预选:相同的、两边独有的全部纳入;两边不同的默认取本机。<b>确认无误直接点「导出配置包」即可</b>,或逐项调整。</div>
+      <p class="small muted" style="margin-top:6px">勾选=纳入。两边都有的不同项,可选「本机 / 导入 / 手动合并」,点开看差异。每项已标建议。</p>
       <div class="row" style="margin-top:8px">
-        <button id="gen" class="primary">生成基线包 ⬇</button>
+        <button id="gen" class="primary">导出配置包</button>
+        <button id="reset-rec" class="ghost">重置为建议</button>
         <span class="small muted" id="gen-summary"></span>
       </div>
     </div>
@@ -1103,31 +1443,59 @@ function renderStep4(body){
         <h3>${CATEGORY_LABEL[c]}</h3>
         ${groups[c].map(it=>{
           const d = state.decisions[it.path];
+          const rec = recommend(it.status);
           const sideNote = it.status==='only-local'?'(来自本机)':it.status==='only-remote'?'(来自导入)':'';
           if (it.status === 'differ'){
             return `<div class="cat">
               <input type="checkbox" data-path="${it.path}" data-act="include" ${d.include?'checked':''}>
               <div style="flex:1">
-                <div><code>${it.path}</code> ${statusPill(it.status)} ${sideNote}</div>
+                <div><code>${it.path}</code> ${statusPill(it.status)}</div>
+                <div class="rec ${rec.cls}">${rec.label} <span class="muted">— ${rec.why}</span></div>
                 <div class="row" style="margin-top:4px">
                   <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="local" ${d.pick==='local'?'checked':''}> 本机</label>
                   <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="remote" ${d.pick==='remote'?'checked':''}> 导入</label>
                   <label class="small"><input type="radio" name="pick-${it.path}" data-path="${it.path}" data-act="pick" data-val="merged" ${d.pick==='merged'?'checked':''}> 手动合并</label>
                 </div>
+                <details class="diff"><summary>查看两边差异</summary><div class="diffbody" data-path="${it.path}"></div></details>
                 <textarea class="merged" data-path="${it.path}" data-act="merged" ${d.pick!=='merged'?'disabled':''} placeholder="选手动合并后在此编辑…">${d.pick==='merged'?(d.mergedText||''):''}</textarea>
               </div>
             </div>`;
           }
           return `<div class="cat">
             <input type="checkbox" data-path="${it.path}" data-act="include" ${d.include?'checked':''}>
-            <div style="flex:1"><div><code>${it.path}</code> ${statusPill(it.status)} ${sideNote}</div></div>
+            <div style="flex:1">
+              <div><code>${it.path}</code> ${statusPill(it.status)} ${sideNote}</div>
+              <div class="rec ${rec.cls}">${rec.label} <span class="muted">— ${rec.why}</span></div>
+            </div>
           </div>`;
         }).join('')}
       </div>`).join('')}
     <div class="card" id="gen-output" style="display:none">
-      <h3>生成的 install.sh(复制到终端跑)</h3>
-      <div class="row" style="margin-bottom:8px"><button id="copy-install" class="ghost">📋 复制</button><span class="small muted" id="copy-msg"></span></div>
-      <pre class="installsh" id="install-pre"></pre>
+      <h3 data-mark="✓ 完成">配置包已导出 · 接下来怎么用?</h3>
+      <p class="small" style="margin-top:0">文件名:<code id="gen-filename"></code>。<b>把这一个 zip 搞到另一台机器</b>(AirDrop / U盘 / 网盘 / git 都行),然后:</p>
+      <ol class="small" style="margin:6px 0 10px; padding-left:22px; line-height:1.9">
+        <li><b>解压</b>到目标机器的 <code>~/dotfiles</code>(目录名要对上,没有就建一个)。</li>
+        <li>打开终端,跑:<br><code>cd ~/dotfiles && bash install.sh</code></li>
+        <li>脚本会自动:在 <code>~/.claude/</code> 下建符号链接指向配置、把 MCP servers 导入(凭证占位需手填回)。完事。</li>
+      </ol>
+      <details class="okbox" style="margin-top:4px">
+        <summary class="small"><b>想要长期双向同步?(可选,推荐)</b></summary>
+        <p class="small" style="margin:6px 0 0">把解压好的 <code>~/dotfiles</code> 目录变成一个 git 仓库,所有机器共享一份:</p>
+        <ol class="small" style="margin:6px 0 0; padding-left:22px; line-height:1.9">
+          <li>在 GitHub / 内网 git 建一个 <b>Private</b> 空仓库(不要勾 README)。</li>
+          <li>在 <code>~/dotfiles</code> 里:<br>
+            <code>git init && git add -A && git commit -m "init"</code><br>
+            <code>git remote add origin git@github.com:你的用户名/dotfiles.git</code><br>
+            <code>git push -u origin main</code></li>
+          <li>以后改配置 → 在本机用本向导重新导出覆盖 <code>~/dotfiles</code> → <code>git commit && git push</code>;另一台 <code>cd ~/dotfiles && git pull</code> 即生效(因为是符号链接)。</li>
+        </ol>
+        <p class="small muted" style="margin:6px 0 0">※ push 前确认脱敏开关状态:仓库 public 的话务必保持默认脱敏,别把真实 token 推上去。</p>
+      </details>
+      <details class="help" style="margin-top:10px">
+        <summary>install.sh 长什么样?(已放进 zip,通常不用手改)</summary>
+        <div class="row" style="margin:8px 0"><button id="copy-install" class="ghost">复制 install.sh</button><span class="small muted" id="copy-msg"></span></div>
+        <pre class="installsh" id="install-pre"></pre>
+      </details>
     </div>
   `;
   updateGenSummary();
@@ -1152,6 +1520,17 @@ function renderStep4(body){
   body.querySelectorAll('textarea[data-act="merged"]').forEach(ta=>{
     ta.addEventListener('input', ()=>{ state.decisions[ta.dataset.path].mergedText = ta.value; });
   });
+  // 填充 differ 项的行级 diff,不用跳回第 3 步
+  body.querySelectorAll('.diffbody').forEach(db=>{
+    const path = db.dataset.path;
+    const L = activeFiles(state.local), R = state.remote.files;
+    const { ops, truncated } = lineDiff(fileText(path, L[path]||{text:''}), fileText(path, R[path]||{text:''}));
+    db.innerHTML = (truncated?'<div class="diffline ctx">⟨已截断⟩</div>':'') + ops.map(o=>{
+      const esc = (o.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      return `<div class="diffline ${o.type}">${o.type==='add'?'+ ':o.type==='del'?'- ':'  '}${esc}</div>`;
+    }).join('');
+  });
+  document.getElementById('reset-rec').addEventListener('click', ()=>{ initDecisions(); renderStep(); toast('已重置为建议预选'); });
   document.getElementById('gen').addEventListener('click', generateAndDownload);
   document.getElementById('copy-install').addEventListener('click', ()=>{
     navigator.clipboard.writeText(state.lastInstallSh).then(()=>{
@@ -1168,6 +1547,23 @@ function updateGenSummary(){
 }
 
 // ===== 生成 & 下载 =====
+// 导出文件名:claude-baseline-<设备名或平台>-YYYYMMDD-HHMM.zip
+// 设备名取设置里的;没设就回退到平台暗示(mac/win/linux)。HHMM 防同机同日冲突,设备名防多机混淆
+function platformHint(){
+  const p = (navigator.platform || '').toLowerCase();
+  if (p.includes('mac'))   return 'mac';
+  if (p.includes('win'))   return 'win';
+  if (p.includes('linux')) return 'linux';
+  return '本机';
+}
+function baselineName(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  let dev = (state.settings.deviceName || '').trim().replace(/[\s\/\\:*?"<>|]+/g,'-');
+  if (!dev) dev = platformHint();
+  return `claude-baseline-${dev}-${stamp}.zip`;
+}
 // Step 1 快捷出口:不依赖远端/diff,直接把"本机勾选内容"打包成 zip
 // 临时用 activeFiles(state.local) 构建 decisions,生成完还原,不污染后续 merge 流程
 function exportLocalZip(){
@@ -1180,14 +1576,15 @@ function exportLocalZip(){
     const files = buildBaselineFiles();
     const zipBytes = writeZip(files);
     const blob = new Blob([zipBytes], {type:'application/zip'});
-    const date = new Date().toISOString().slice(0,10);
-    downloadBlob(blob, `claude-baseline-${date}.zip`);
+    const name = baselineName();
+    downloadBlob(blob, name);
     const out = document.getElementById('local-install-out');
     const pre = document.getElementById('local-install-pre');
     if (out && pre){ pre.textContent = state.lastInstallSh; out.style.display=''; }
-    toast(`已生成 claude-baseline-${date}.zip(${Object.keys(files).length} 文件,已脱敏)`);
+    toast(`已生成 ${name}(${Object.keys(files).length} 文件,已脱敏)`);
+    if (!(state.settings.deviceName||'').trim()) toast('提示:设置里填「本机设备名」,文件名会带上机器标识更好区分');
   } catch(e){
-    console.error('[sync.html] exportLocalZip 失败', e);
+    console.error('[sync-claude.html] exportLocalZip 失败', e);
     toast('生成失败: ' + e.message);
   } finally {
     state.decisions = saved;
@@ -1197,12 +1594,14 @@ function generateAndDownload(){
   const files = buildBaselineFiles();
   const zipBytes = writeZip(files);
   const blob = new Blob([zipBytes], {type:'application/zip'});
-  const date = new Date().toISOString().slice(0,10);
-  downloadBlob(blob, `claude-baseline-${date}.zip`);
-  // 显示 install.sh
+  const name = baselineName();
+  downloadBlob(blob, name);
+  // 显示"接下来怎么做"指引 + install.sh
   document.getElementById('gen-output').style.display = '';
+  const fn = document.getElementById('gen-filename'); if (fn) fn.textContent = name;
   document.getElementById('install-pre').textContent = state.lastInstallSh;
-  toast(`已生成:claude-baseline-${date}.zip(${Object.keys(files).length} 文件)`);
+  toast(`已导出 ${name}(${Object.keys(files).length} 文件)`);
+  document.getElementById('gen-output').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // ===== 10. WIRING =====
