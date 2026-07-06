@@ -9,3 +9,6 @@ claude-baseline-*.zip
 # 内部设计文档(不公开)
 docs/跨平台免命令行方案.md
 
+# 根目录内部项目笔记
+CLAUDE.md
+
